@@ -6,17 +6,19 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 
 import com.codahale.metrics.annotation.Timed;
+import com.wordnik.swagger.annotations.Api;
+import com.wordnik.swagger.annotations.ApiOperation;
 
+import java.util.HashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
-/** Shard class. This will receive incoming requests, apply consistent hashing
- *  algorithm to determine which replica to pass the request to, and if it is
- *  the right replica then process the request and return it to the client. 
+/** Shards receive incoming requests from the router,
+ *  process the request and return it to the client. 
  */
-
-@Path("/")
+@Path("/shard")
+@Api("/shard")
 // TODO: return JSON? or some binary format like protobuf?
-//@Produces(MediaType.APPLICATION_JSON)
+@Produces(MediaType.APPLICATION_JSON)
 public class Shard {
     private final int shardId;
     private final AtomicLong counter;
@@ -28,7 +30,14 @@ public class Shard {
 
     @GET
     @Timed
-    public String getHits() {
-        return "Shard="+shardId+" Hits="+counter.incrementAndGet();
+    @Path("/0")
+    // TODO: @Path("/{shardId}")
+    @ApiOperation("Record a request to this shard")
+    public HashMap<String,Object> getHits() {
+    // TODO: public HashMap<String,Object> getHits(@PathParam("shardId")) {
+        return new HashMap<String,Object>() {{
+            put("shard", shardId);
+            put("hits", counter.incrementAndGet());
+        }};
     }
 }
