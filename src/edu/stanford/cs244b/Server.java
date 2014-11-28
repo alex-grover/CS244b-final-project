@@ -39,9 +39,6 @@ public class Server extends Application<Configuration> {
         environment.jersey().register(shard);
         
         // TODO: automatically discover shards from other servers?
-        final Router router = new Router(new Shard[]{shard});
-        // register the router endpoint
-        environment.jersey().register(router);
         
         // add api documentation ui
         swaggerDropwizard.onRun(configuration, environment, "localhost");
