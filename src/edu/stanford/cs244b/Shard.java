@@ -24,11 +24,13 @@ import java.nio.file.StandardCopyOption;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 
 /** Shards receive incoming requests from the router,
@@ -51,6 +53,10 @@ public class Shard {
     public Shard(int shardId) {
         this.shardId = shardId;
         this.counter = new AtomicLong();
+        
+        // create temporary directories for this shard
+        (new File(TEMP_DIR)).mkdir();
+        (new File(DATA_DIR)).mkdir();
     }
     
     /** perform basic operations which apply for each request,
@@ -92,12 +98,16 @@ public class Shard {
 
         // write file to temporary location
         // TODO: this could result in race condition if files are created at same instance... 
-        java.nio.file.Path tempPath = Paths.get(TEMP_DIR, "temp-" + (new Date()));
+        java.nio.file.Path tempPath = Paths.get(TEMP_DIR, UUID.randomUUID().toString());
         Files.copy(uploadInputStream, tempPath);
 
         // compute SHA-256 hash
         byte[] digest = sha256.digest();
-        String sha256hash = Base64.encodeBase64String(digest);
+        StringBuffer result = new StringBuffer();
+        for (byte byt : digest) {
+            result.append(Integer.toString((byt & 0xff) + 0x100, 16).substring(1));
+        }
+        String sha256hash =  result.toString(); 
         java.nio.file.Path outputPath = Paths.get(DATA_DIR, sha256hash);
         
         // perform atomic rename; TODO: verify that hash is correct...

@@ -2,4 +2,6 @@
 .settings
 .project
 bin
+data
 target
+temp
