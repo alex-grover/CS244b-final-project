@@ -8,10 +8,14 @@ import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
 
+import org.apache.commons.codec.DecoderException;
 import org.apache.commons.codec.binary.Base64;
+import org.apache.commons.codec.binary.Hex;
 
 import com.codahale.metrics.annotation.Timed;
+import com.sun.jersey.api.Responses;
 import com.sun.jersey.core.header.FormDataContentDisposition;
 import com.sun.jersey.multipart.FormDataBodyPart;
 import com.sun.jersey.multipart.FormDataParam;
@@ -25,6 +29,7 @@ import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Date;
@@ -33,19 +38,17 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 
-/** Shards receive incoming requests from the router,
+/** A Shard represents a node in the Chord ring 
+ * Shards receive incoming requests from the router,
  *  process the request and return it to the client. 
  */
-@Path("/shard/0")
+@Path("/shard")
 //TODO: @Path("/{shardId}")
-@Api("/shard/0")
+@Api("/shard")
 // TODO: return JSON? or some binary format like protobuf?
-@Produces(MediaType.APPLICATION_JSON)
 public class Shard {
     private final int shardId;
     private final AtomicLong counter;
-    
-    private Map<String,String> storage = new HashMap<String,String>();
     
     private final String TEMP_DIR = "temp";
     private final String DATA_DIR = "data";
@@ -63,9 +66,9 @@ public class Shard {
      *  eg: populate hashmap containing shardId, record a hit to the shard
      *  (maybe for load-balancing purposes) 
      */
-    private HashMap<String,Object> processRequest() {
+    private HashMap<String,Object> recordRequest() {
         return new HashMap<String,Object>() {{
-            put("shard", shardId);
+            put("shard", Integer.toHexString(shardId));
             put("hits", counter.incrementAndGet());
         }};
     }
@@ -74,8 +77,9 @@ public class Shard {
      * @throws IOException 
      * @throws NoSuchAlgorithmException */
     @POST
-    @Consumes(MediaType.MULTIPART_FORM_DATA)
     @Timed
+    @Consumes(MediaType.MULTIPART_FORM_DATA)
+    @Produces(MediaType.APPLICATION_JSON)
     @ApiOperation("Insert a new item into the distributed hash table")
     public Map<String,Object> insertItem(@FormDataParam("file") final InputStream uploadInputStream //,
             //@FormDataParam("file") final FormDataContentDisposition contentDispositionHeader
@@ -83,7 +87,7 @@ public class Shard {
             ) throws NoSuchAlgorithmException, IOException {
         final String sha256hash = saveFile(uploadInputStream);
         return new HashMap<String,Object>() {{
-            put("shard", shardId);
+            put("shard", Integer.toHexString(shardId));
             put("sha256", sha256hash);
         }};
     }
@@ -97,20 +101,17 @@ public class Shard {
         DigestInputStream dis = new DigestInputStream(uploadInputStream, sha256);
 
         // write file to temporary location
-        // TODO: this could result in race condition if files are created at same instance... 
         java.nio.file.Path tempPath = Paths.get(TEMP_DIR, UUID.randomUUID().toString());
         Files.copy(uploadInputStream, tempPath);
 
         // compute SHA-256 hash
         byte[] digest = sha256.digest();
-        StringBuffer result = new StringBuffer();
-        for (byte byt : digest) {
-            result.append(Integer.toString((byt & 0xff) + 0x100, 16).substring(1));
-        }
-        String sha256hash =  result.toString(); 
+        String sha256hash = Hex.encodeHexString(digest); 
         java.nio.file.Path outputPath = Paths.get(DATA_DIR, sha256hash);
         
-        // perform atomic rename; TODO: verify that hash is correct...
+        // TODO: verify that hash is correct, distribute to other replicas...
+        
+        // perform atomic rename on success
         Files.move(tempPath, outputPath, StandardCopyOption.ATOMIC_MOVE);
         return sha256hash;
     }
@@ -118,18 +119,23 @@ public class Shard {
     /** Update an existing item in the distributed hash table */
     //@PUT 
 
+    /** Retrieve the item with the specified SHA-256 hash 
+     * @throws DecoderException 
+     * @throws IOException */
     @GET
     @Timed
-    @Path("/shard/0/{itemId}")
+    @Produces(MediaType.APPLICATION_OCTET_STREAM)
+    @Path("/{itemId}")
     @ApiOperation("Retrieve an item from this shard, or return 404 Not Found if it does not exist")
-    public Map<String,Object> getItem(@PathParam("itemId") String itemId) {
-        Map<String, Object> results = processRequest();
-        Object item = storage.get(itemId);
-        if (item == null) {
-            //throw new Exception
+    public Response getItem(@PathParam("itemId") String sha256hash) throws DecoderException, IOException {
+        byte[] id = Hex.decodeHex(sha256hash.toCharArray());
+        //Map<String, Object> results = recordRequest();
+        // TODO: check that file is owned by this node, otherwise forward to next node per fingertable
+        java.nio.file.Path filePath = Paths.get(DATA_DIR, sha256hash);
+        if (Files.exists(filePath)) {
+            return Response.ok().entity(Files.newInputStream(filePath)).build();
         } else {
-            results.put(itemId, item);
+            return Responses.notFound().build();
         }
-        return results;
     }
 }

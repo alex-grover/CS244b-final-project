@@ -22,7 +22,7 @@ Menu > Run > Run Configurations
 * Main Class: edu.stanford.cs244b.Server
 * Arguments Tab > Program Arguments: server
 
-Browse to [http://localhost:8080/shard/0](http://localhost:8080/shard/0); you should see {shard: 0, hits: 1}. The hits counter increases on each page refresh (eg: each time you send a GET to the /shard/0 endpoint).
+Once the server is running, open upload.html in your browser. Upload a file; you should receive a response such as {"shard":"c0a80105","sha256":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"}. Note that uploaded files are saved to the filesystem in the data/ directory. Now go to [http://localhost:8080/shard/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855](http://localhost:8080/shard/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855) and you can download the file you just uploaded. You may need to rename the file so that it is interpreted in the correct format (eg: append .png if the original file you uploaded was a PNG image).
 
 Browse to [http://localhost:8080/swagger](http://localhost:8080/swagger). There are 2 endpoints defined, the first is the [shard](http://localhost:8080/swagger#!/shard) from before. The second is the [router](http://localhost:8080/swagger#!/router) which will dispatch requests to the correct shard. Note that the router is currently hardcoded to redirect requests to shard 0.
 
