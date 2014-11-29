@@ -72,9 +72,9 @@ public class ChordNode {
         fingerTable[0] = existingNode.findSuccessor(shardid);
         predecessor = getSuccessor().predecessor;
         getSuccessor().predecessor = this;
-        logger.info("InitFingerTable, predecessor= "+predecessor.host+" shardid="+predecessor.shardIdAsHex()+
-                "\ncurrent="+host+" shardid="+shardIdAsHex()+
-                "\nsuccessor="+getSuccessor().host+" shardid="+getSuccessor().shardIdAsHex());
+        logger.info("InitFingerTable, predecessor= "+predecessor+
+                "\ncurrent="+this+
+                "\nsuccessor="+getSuccessor());
         // TODO: for i=1 to m-1: update fingers
         //for (int index=0; index < NUM_FINGERS; index++) {
         //}
@@ -110,5 +110,10 @@ public class ChordNode {
     /** Convenience method for displaying shardid as a hex string */
     public String shardIdAsHex() {
         return Integer.toHexString(shardid);
+    }
+    
+    @Override
+    public String toString() {
+        return "shardid="+shardIdAsHex()+" @"+host;
     }
 }
