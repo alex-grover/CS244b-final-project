@@ -11,6 +11,7 @@ import edu.stanford.cs244b.Util;
 /** Core components of the Chord distributed hash table implementation.
  *  Keeps track of other shards in the ring to ensure O(log n) lookup */
 public class ChordNode {
+    final static int NUM_FINGERS = 1;
     final static Logger logger = LoggerFactory.getLogger(ChordNode.class);
     
     protected InetAddress host;
@@ -30,6 +31,7 @@ public class ChordNode {
         this.host = host;
         this.port = port;
         this.shardid = Shard.inetAddressToShardId(host);
+        fingerTable = new ChordNode[NUM_FINGERS];
     }
     
     /** Successor is first entry in the fingerTable */
@@ -64,13 +66,18 @@ public class ChordNode {
      *  existingNode is an arbitrary node already on the network
      */
     public boolean initFingerTable(ChordNode existingNode) {
-        fingerTable[0] = existingNode.findSuccessor(fingerTable[0].shardid);
+        // TODO: this seems wrong, since finger table is not yet initialized for new node which is just joining...
+        // fingerTable[0] = existingNode.findSuccessor(fingerTable[0].shardid);
+        // temporary workaround:
+        fingerTable[0] = existingNode.findSuccessor(shardid);
         predecessor = getSuccessor().predecessor;
         getSuccessor().predecessor = this;
         logger.info("InitFingerTable, predecessor= "+predecessor.host+" shardid="+predecessor.shardIdAsHex()+
                 "\ncurrent="+host+" shardid="+shardIdAsHex()+
                 "\nsuccessor="+getSuccessor().host+" shardid="+getSuccessor().shardIdAsHex());
         // TODO: for i=1 to m-1: update fingers
+        //for (int index=0; index < NUM_FINGERS; index++) {
+        //}
         return true;
     }
     
