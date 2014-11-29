@@ -35,4 +35,19 @@ public class Util {
             return ((identifier >= intervalStart) || (identifier < intervalEnd));
         }
     }
+    
+    /** Redistribute integer identifier keyspace using Knuth's multiplicative method.
+     *  Modified to use long internally since java does not have unsigned int.
+     *  This performs one-to-one remapping from integer to integer to avoid collisions
+     *  https://stackoverflow.com/questions/664014/what-integer-hash-function-are-good-that-accepts-an-integer-hash-key
+     */
+    public static int intHash(int input) {
+        // convert to unsigned long
+        long unsignedValue = ((long) input)-Integer.MIN_VALUE;
+        long unsignedIntMax = (1l << 32);
+        // Knuth's multiplicative method
+        long unsignedHashValue = ((unsignedValue*2654435761l) % unsignedIntMax);
+        // convert back to signed integer
+        return (int) (unsignedHashValue+Integer.MIN_VALUE);
+    }
 }

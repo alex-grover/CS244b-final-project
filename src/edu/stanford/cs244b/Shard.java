@@ -168,9 +168,8 @@ public class Shard {
     
     /** Compute shardid from an IP address */
     public static int inetAddressToShardId(InetAddress address) {
-        // TODO: use Knuth's multiplicative method or other "hash" of IP address to evenly
-        // distribute shard identifiers; use long since java does not have unsigned int
-        // https://stackoverflow.com/questions/664014/what-integer-hash-function-are-good-that-accepts-an-integer-hash-key
-        return Util.ipByteArrayToInt(address.getAddress());
+        // Use Knuth's multiplicative method "hash" of IP address to evenly
+        // distribute shard identifiers
+        return Util.intHash(Util.ipByteArrayToInt(address.getAddress()));
     }
 }
