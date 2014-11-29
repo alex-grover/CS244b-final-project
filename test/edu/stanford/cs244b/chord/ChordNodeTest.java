@@ -27,13 +27,33 @@ public class ChordNodeTest {
         node1.join(node1, true);
         ChordNode node2 = new ChordNode(InetAddress.getByName("192.168.1.2"), 8080);
         node2.join(node1, false);
-        // stabilize()
         
         Assert.assertEquals(node2, node1.predecessor);
-        // the following fails because we haven't implemented stabilization yet...
-        //Assert.assertEquals(node2, node1.fingerTable[0]);
+        Assert.assertEquals(node2, node1.fingerTable[0]);
         Assert.assertEquals(node1, node2.predecessor);
         Assert.assertEquals(node1, node2.fingerTable[0]);
+    }
+    
+    @Test
+    public void testJoinExisting2() throws UnknownHostException {
+        // setup
+        ChordNode node1 = new ChordNode(InetAddress.getByName("192.168.1.1"), 8080);
+        node1.join(node1, true);  // node1 shardid=71d92ab1
+        ChordNode node2 = new ChordNode(InetAddress.getByName("192.168.1.2"), 8080);
+        node2.join(node1, false); // node2 shardid=1010a462
+        ChordNode node3 = new ChordNode(InetAddress.getByName("192.168.1.3"), 8080);
+        node3.join(node1, false); // node3 shardid=ae481e13
+        // node2(1010a462) => node1(71d92ab1) => node3(ae481e13) => node2
+        
+        Assert.assertEquals(node2, node1.predecessor);
+        Assert.assertEquals(node3, node2.predecessor);
+        Assert.assertEquals(node1, node3.predecessor);
+        
+        Assert.assertEquals(node1, node2.fingerTable[0]);
+        Assert.assertEquals(node3, node1.fingerTable[0]);
+        Assert.assertEquals(node2, node3.fingerTable[0]);
+        
+        
     }
 
     /*@Test

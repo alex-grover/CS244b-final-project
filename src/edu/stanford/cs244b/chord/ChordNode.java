@@ -57,7 +57,7 @@ public class ChordNode {
             logger.info("Joining existing ring, querying node: "+existingNode.host+" shardid="+existingNode.shardIdAsHex());
             // TODO: invoke remote procedure call here
             initFingerTable(existingNode);
-            // TODO: updateOthers()
+            updateOthers();
         }
         return true;
     }
@@ -105,6 +105,28 @@ public class ChordNode {
         // TODO: lookup in finger tree
         // for now, just return successor node
         return this.getSuccessor();
+    }
+    
+    /** Update all nodes whose finger tables should refer to n */
+    public void updateOthers() {
+        for (int index=0; index < NUM_FINGERS; index++) {
+            // find last node p whose i'th finger might be n
+            ChordNode p = findPredecessor(shardid - (1 << index));
+            p.updateFingerTable(this, index);
+        }
+    }
+    
+    /** If ChordNode s is the i'th finger of this ChordNode, update fingerTable */
+    public boolean updateFingerTable(ChordNode s, int index) {
+        if (s.shardid == this.shardid) {
+            return true;
+        }
+        if (Util.withinInterval(s.shardid, shardid, fingerTable[index].shardid)) {
+            fingerTable[index] = s;
+            ChordNode p = predecessor;
+            p.updateFingerTable(s, index);
+        }
+        return true;
     }
     
     /** Convenience method for displaying shardid as a hex string */
