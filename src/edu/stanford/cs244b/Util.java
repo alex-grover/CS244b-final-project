@@ -1,5 +1,6 @@
 package edu.stanford.cs244b;
 
+/** Collection of various useful utility methods */
 public class Util {    
     /** Take 32 most-significant bits of IP address
      *  (represented as bytes), and convert to integer id */

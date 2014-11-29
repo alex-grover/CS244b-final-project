@@ -45,7 +45,7 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 
 /** A Shard represents a node in the Chord ring 
- * Shards receive incoming requests from the router,
+ *  Shards receive incoming requests from the router,
  *  process the request and return it to the client. 
  */
 @Path("/shard")
@@ -69,13 +69,17 @@ public class Shard {
         // get my IP address
         InetAddress serverIP = InetAddress.getLocalHost();
         // use first 32 bits for server id...
-        shardId = Util.ipByteArrayToInt(serverIP.getAddress());
+        shardId = inetAddressToShardId(serverIP);
         logger.info("Registering host "+serverIP+" in Chord ring with shardId="+Integer.toHexString(shardId));
         
-        // get IP address of node in chord ring to join
+        // get IP address of node in chord ring where we begin the join process
         InetAddress hostToJoin = chordConfig.getEntryHost();
         int portToJoin = chordConfig.getEntryPort();
-        logger.info("Attempting to join Chord ring host="+hostToJoin+" port="+portToJoin);
+        if (hostToJoin.isLoopbackAddress()) {
+            logger.info("Chord entryHost is loopback address, creating new Chord ring");
+        } else {
+            logger.info("Attempting to join Chord ring host="+hostToJoin+" port="+portToJoin);
+        }
         
         this.counter = new AtomicLong();
     }
@@ -155,5 +159,10 @@ public class Shard {
         } else {
             return Responses.notFound().build();
         }
+    }
+    
+    /** Compute shardid from an IP address */
+    public static int inetAddressToShardId(InetAddress address) {
+        return Util.ipByteArrayToInt(address.getAddress());
     }
 }
