@@ -11,7 +11,7 @@ import io.federecio.dropwizard.swagger.SwaggerDropwizard;
 
 /** Main server class - the entry-point into our system
  *  Define configuration and any initialization steps here. */
-public class Server extends Application<Configuration> {
+public class Server extends Application<ChordConfiguration> {
     
     
     private final SwaggerDropwizard swaggerDropwizard = new SwaggerDropwizard();
@@ -21,20 +21,15 @@ public class Server extends Application<Configuration> {
     }
 
     @Override
-    public void initialize(Bootstrap<Configuration> bootstrap) {
+    public void initialize(Bootstrap<ChordConfiguration> bootstrap) {
         swaggerDropwizard.onInitialize(bootstrap);
     }
 
     @Override
-    public void run(Configuration configuration,
+    public void run(ChordConfiguration configuration,
                     Environment environment) throws UnknownHostException {
-        InetAddress serverIP = InetAddress.getLocalHost();
-        // use first 32 bits for server id...
-        int identifier = Util.ipByteArrayToInt(serverIP.getAddress());
-        System.out.println("Registering host "+serverIP+" in Chord ring with id="+Integer.toHexString(identifier));
-        
         // TODO: each shard should be uniquely identified/numbered...
-        final Shard shard = new Shard(identifier);
+        final Shard shard = new Shard(configuration.getChord());
         // register the shard endpoint
         environment.jersey().register(shard);
         
