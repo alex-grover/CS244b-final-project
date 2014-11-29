@@ -22,4 +22,17 @@ public class Util {
             (byte)((bytes       ) & 0xff)
         };
     }
+    
+    /** Determine whether the identifier falls within the specified interval (start included,
+     *  end excluded) while taking wrapping into account, since identifiers are located on a ring *
+     */
+    public static boolean withinInterval(int identifier, int intervalStart, int intervalEnd) {
+        if (intervalStart < intervalEnd) {
+            // standard monotonically increasing case
+            return ((identifier >= intervalStart) && (identifier < intervalEnd));
+        } else {
+            // wrap around case, also handles special case for single node which encompasses full ring
+            return ((identifier >= intervalStart) || (identifier < intervalEnd));
+        }
+    }
 }

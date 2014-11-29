@@ -70,7 +70,7 @@ public class Shard {
         InetAddress serverIP = InetAddress.getLocalHost();
         // use first 32 bits for server id...
         shardId = inetAddressToShardId(serverIP);
-        logger.info("Registering host "+serverIP+" in Chord ring with shardId="+Integer.toHexString(shardId));
+        logger.info("Registering host "+serverIP+" in Chord ring with shardId="+shardIdAsHex());
         
         // get IP address of node in chord ring where we begin the join process
         InetAddress hostToJoin = chordConfig.getEntryHost();
@@ -90,7 +90,7 @@ public class Shard {
      */
     private HashMap<String,Object> recordRequest() {
         return new HashMap<String,Object>() {{
-            put("shard", Integer.toHexString(shardId));
+            put("shard", shardIdAsHex());
             put("hits", counter.incrementAndGet());
         }};
     }
@@ -109,7 +109,7 @@ public class Shard {
             ) throws NoSuchAlgorithmException, IOException {
         final String sha256hash = saveFile(uploadInputStream);
         return new HashMap<String,Object>() {{
-            put("shard", Integer.toHexString(shardId));
+            put("shard", shardIdAsHex());
             put("sha256", sha256hash);
         }};
     }
@@ -159,6 +159,11 @@ public class Shard {
         } else {
             return Responses.notFound().build();
         }
+    }
+    
+    /** Convenience method for displaying shardid as a hex string */
+    public String shardIdAsHex() {
+        return Integer.toHexString(shardId);
     }
     
     /** Compute shardid from an IP address */
