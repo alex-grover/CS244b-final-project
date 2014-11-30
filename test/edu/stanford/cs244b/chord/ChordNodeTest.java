@@ -52,8 +52,6 @@ public class ChordNodeTest {
         Assert.assertEquals(node1, node2.fingerTable[0]);
         Assert.assertEquals(node3, node1.fingerTable[0]);
         Assert.assertEquals(node2, node3.fingerTable[0]);
-        
-        
     }
 
     /*@Test

@@ -51,7 +51,10 @@ public class ChordNode {
         if (isFirstNode) {
             logger.info("Joining new ring, I am first node: "+existingNode.host+" shardid="+existingNode.shardIdAsHex());
             // TODO: initialize full finger table; for now we only keep track of successor
-            fingerTable = new ChordNode[] { existingNode };
+            fingerTable = new ChordNode[NUM_FINGERS];
+            for (int index=0; index < NUM_FINGERS; index++) {
+                fingerTable[index] = existingNode;
+            }
             predecessor = existingNode;
         } else {
             logger.info("Joining existing ring, querying node: "+existingNode.host+" shardid="+existingNode.shardIdAsHex());
@@ -75,9 +78,15 @@ public class ChordNode {
         logger.info("InitFingerTable, predecessor= "+predecessor+
                 "\ncurrent="+this+
                 "\nsuccessor="+getSuccessor());
-        // TODO: for i=1 to m-1: update fingers
-        //for (int index=0; index < NUM_FINGERS; index++) {
-        //}
+        // update fingers
+        for (int index=0; index < NUM_FINGERS-1; index++) {
+            if (Util.withinInterval(fingerTable[index+1].shardid, shardid, fingerTable[index].shardid)) {
+                fingerTable[index+1] = fingerTable[index];
+            } else {
+                fingerTable[index+1] = existingNode.findSuccessor(fingerTable[index+1].shardid);
+                //if (!Util.withinInterval(fingerTable[index+1].shardid, shardid, fingerTable[index].shardid)) {
+            }
+        }
         return true;
     }
     
@@ -92,7 +101,7 @@ public class ChordNode {
     public ChordNode findPredecessor(int identifier) {
         ChordNode next = this;
         logger.info("FindPredecessor for id="+Integer.toHexString(identifier)+" next_shardid="+next.shardIdAsHex());
-        while (!Util.withinInterval(identifier, next.shardid, next.getSuccessor().shardid)) {
+        while (!Util.withinInterval(identifier, next.shardid+1, next.getSuccessor().shardid+1)) {
             next = next.closestPrecedingFinger(identifier);
             logger.info("FindPredecessor for id="+Integer.toHexString(identifier)+" next_shardid="+next.shardIdAsHex());
         }
@@ -102,16 +111,23 @@ public class ChordNode {
     
     /** Return closest preceding id */
     public ChordNode closestPrecedingFinger(int identifier) {
-        // TODO: lookup in finger tree
-        // for now, just return successor node
-        return this.getSuccessor();
+        ChordNode successor = this.getSuccessor();
+        // lookup in finger tree
+        for (int index = NUM_FINGERS-1; index >= 0; index--) {
+            if (Util.withinInterval(fingerTable[index].shardid, shardid+1, identifier)) {
+                return fingerTable[index];
+            }
+        }
+        return this;
     }
     
     /** Update all nodes whose finger tables should refer to n */
     public void updateOthers() {
         for (int index=0; index < NUM_FINGERS; index++) {
             // find last node p whose i'th finger might be n
-            ChordNode p = findPredecessor(shardid - (1 << index));
+            // shardid+1 to fix shadow bug (updateOthers fails to update immediate predecessor
+            // of a newly joined node if that predecessor occupied the slot right behind it.
+            ChordNode p = findPredecessor((shardid - (1 << index))+1);
             p.updateFingerTable(this, index);
         }
     }
