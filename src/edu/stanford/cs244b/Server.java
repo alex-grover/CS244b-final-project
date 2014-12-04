@@ -2,6 +2,7 @@ package edu.stanford.cs244b;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.security.NoSuchAlgorithmException;
 
 import io.dropwizard.Application;
 import io.dropwizard.Configuration;
@@ -27,7 +28,7 @@ public class Server extends Application<ChordConfiguration> {
 
     @Override
     public void run(ChordConfiguration configuration,
-                    Environment environment) throws UnknownHostException {
+                    Environment environment) throws UnknownHostException, NoSuchAlgorithmException {
         // TODO: each shard should be uniquely identified/numbered...
         final Shard shard = new Shard(configuration.getChord());
         // register the shard endpoint

@@ -1,5 +1,8 @@
 package edu.stanford.cs244b;
 
+import javax.crypto.KeyGenerator;
+import javax.crypto.SecretKey;
+import javax.crypto.spec.SecretKeySpec;
 import javax.ws.rs.FormParam;
 import javax.ws.rs.GET;
 import javax.ws.rs.POST;
@@ -34,6 +37,7 @@ import java.nio.file.StandardCopyOption;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -58,13 +62,19 @@ public class Shard {
     private final int shardId;
     private final AtomicLong counter;
     
+    private final String KEY_FILE = "key.txt";
     private final String TEMP_DIR = "temp";
     private final String DATA_DIR = "data";
+    
+    SecretKeySpec secretKey;
 
-    public Shard(Chord chordConfig) throws UnknownHostException {
+    public Shard(Chord chordConfig) throws UnknownHostException, NoSuchAlgorithmException {
         // create temporary directories for this shard
         (new File(TEMP_DIR)).mkdir();
         (new File(DATA_DIR)).mkdir();
+        
+        // load key from filesystem if it exists
+        secretKey = readOrCreateSecretKey();
         
         // get my IP address
         InetAddress serverIP = InetAddress.getLocalHost();
@@ -159,6 +169,34 @@ public class Shard {
         } else {
             return Responses.notFound().build();
         }
+    }
+    
+    public SecretKeySpec readOrCreateSecretKey() throws NoSuchAlgorithmException {
+        java.nio.file.Path file = Paths.get(KEY_FILE);
+        if (Files.exists(file)) {
+            logger.info("Loading existing secret key from file "+KEY_FILE);
+            try {
+                String keyString = new String(Files.readAllBytes(file));
+                return new SecretKeySpec(Hex.decodeHex(keyString.toCharArray()), "RAW");
+            } catch (Exception e) {
+                logger.error("Failed to load secret key from file "+KEY_FILE, e);
+            }
+        }
+        logger.info("Generating new secret key");
+        KeyGenerator keygen = KeyGenerator.getInstance("AES");
+        // TODO: is default securerandom number generator safe? does it need to be seeded?
+        //SecureRandom secureRandom = new SecureRandom();
+        //keygen.init(256, secureRandom);
+        byte[] secretKeyValue = keygen.generateKey().getEncoded();
+        SecretKeySpec secretKey = new SecretKeySpec(secretKeyValue, "AES");
+        String keyString = new String(Hex.encodeHex(secretKeyValue));
+        try {
+            Files.write(file, keyString.getBytes());
+            logger.info("Successfully wrote new secret key to file "+KEY_FILE);
+        } catch (Exception e) {
+            logger.error("Failed to write secret key to file "+KEY_FILE, e);
+        }
+        return secretKey;
     }
     
     /** Convenience method for displaying shardid as a hex string */

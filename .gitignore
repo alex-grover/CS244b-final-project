@@ -3,5 +3,6 @@
 .project
 bin
 data
+key.txt
 target
 temp
