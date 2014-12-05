@@ -34,6 +34,10 @@ public class ChordConfiguration extends Configuration {
         @Max(65535)
         @JsonProperty
         private int entryPort;
+        
+        /** Algorithm to use for generating identifiers for objects added to chord ring */
+        @JsonProperty
+        private String identifier;
 
         public InetAddress getEntryHost() {
             return entryHost;
@@ -49,6 +53,14 @@ public class ChordConfiguration extends Configuration {
 
         public void setEntryPort(int entryPort) {
             this.entryPort = entryPort;
+        }
+
+        public String getIdentifier() {
+            return identifier;
+        }
+
+        public void setIdentifier(String identifier) {
+            this.identifier = identifier;
         }    
     }
 }

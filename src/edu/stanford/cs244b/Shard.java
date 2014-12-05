@@ -1,9 +1,7 @@
 package edu.stanford.cs244b;
 
 import javax.crypto.KeyGenerator;
-import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
-import javax.ws.rs.FormParam;
 import javax.ws.rs.GET;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
@@ -16,6 +14,7 @@ import javax.ws.rs.core.Response;
 import org.apache.commons.codec.DecoderException;
 import org.apache.commons.codec.binary.Base64;
 import org.apache.commons.codec.binary.Hex;
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -28,6 +27,7 @@ import com.wordnik.swagger.annotations.Api;
 import com.wordnik.swagger.annotations.ApiOperation;
 
 import edu.stanford.cs244b.ChordConfiguration.Chord;
+import edu.stanford.cs244b.crypto.HMACInputStream;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
@@ -35,9 +35,12 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.security.DigestInputStream;
+import java.security.InvalidKeyException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.security.NoSuchProviderException;
 import java.security.SecureRandom;
+import java.security.Security;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -57,6 +60,11 @@ import java.util.concurrent.atomic.AtomicLong;
 @Api("/shard")
 // TODO: return JSON? or some binary format like protobuf?
 public class Shard {
+    public enum IdentifierAlgorithm {
+        SHA256,
+        HMAC_SHA256 // default
+    }
+    
     final static Logger logger = LoggerFactory.getLogger(Shard.class);
     
     private final int shardId;
@@ -66,12 +74,22 @@ public class Shard {
     private final String TEMP_DIR = "temp";
     private final String DATA_DIR = "data";
     
+    public IdentifierAlgorithm identifierAlgo;
     SecretKeySpec secretKey;
 
     public Shard(Chord chordConfig) throws UnknownHostException, NoSuchAlgorithmException {
         // create temporary directories for this shard
         (new File(TEMP_DIR)).mkdir();
         (new File(DATA_DIR)).mkdir();
+        
+        // determine algorithm used to generate identifiers for objects added to chord ring
+        if (chordConfig.getIdentifier().toLowerCase().equals(IdentifierAlgorithm.SHA256.toString().toLowerCase())) {
+            identifierAlgo = IdentifierAlgorithm.SHA256;
+        } else {
+            identifierAlgo = IdentifierAlgorithm.HMAC_SHA256; // default
+            Security.addProvider(new BouncyCastleProvider());
+        }
+        logger.info("Using "+identifierAlgo+" to generate identifiers for objects added to chord ring");
         
         // load key from filesystem if it exists
         secretKey = readOrCreateSecretKey();
@@ -107,7 +125,9 @@ public class Shard {
 
     /** Insert a new item into the distributed hash table 
      * @throws IOException 
-     * @throws NoSuchAlgorithmException */
+     * @throws NoSuchAlgorithmException 
+     * @throws InvalidKeyException 
+     * @throws NoSuchProviderException */
     @POST
     @Timed
     @Consumes(MediaType.MULTIPART_FORM_DATA)
@@ -116,36 +136,48 @@ public class Shard {
     public Map<String,Object> insertItem(@FormDataParam("file") final InputStream uploadInputStream //,
             //@FormDataParam("file") final FormDataContentDisposition contentDispositionHeader
             //@FormDataParam("fileBodyPart") FormDataBodyPart body
-            ) throws NoSuchAlgorithmException, IOException {
-        final String sha256hash = saveFile(uploadInputStream);
+            ) throws NoSuchAlgorithmException, IOException, InvalidKeyException, NoSuchProviderException {
+        final String objectId = saveFile(uploadInputStream);
         return new HashMap<String,Object>() {{
             put("shard", shardIdAsHex());
-            put("sha256", sha256hash);
+            put("id", objectId);
         }};
     }
     
     /** Save uploaded inputStream to disk, return the sha256 identifier of the file 
      * @throws NoSuchAlgorithmException 
-     * @throws IOException */ 
+     * @throws IOException 
+     * @throws InvalidKeyException 
+     * @throws NoSuchProviderException */ 
     private String saveFile(InputStream uploadInputStream)
-            throws NoSuchAlgorithmException, IOException {
+            throws NoSuchAlgorithmException, IOException, InvalidKeyException, NoSuchProviderException {
+        byte[] digest;
+        InputStream wrappedInputStream;
         MessageDigest sha256 = MessageDigest.getInstance("SHA-256");
-        DigestInputStream dis = new DigestInputStream(uploadInputStream, sha256);
-
+        if (identifierAlgo.equals(IdentifierAlgorithm.SHA256)) {
+            wrappedInputStream = new DigestInputStream(uploadInputStream, sha256);
+        } else { // assume HMAC_SHA256
+            wrappedInputStream = new HMACInputStream(uploadInputStream, secretKey);
+        }
         // write file to temporary location
         java.nio.file.Path tempPath = Paths.get(TEMP_DIR, UUID.randomUUID().toString());
-        Files.copy(uploadInputStream, tempPath);
-
+        Files.copy(wrappedInputStream, tempPath);
+        
         // compute SHA-256 hash
-        byte[] digest = sha256.digest();
-        String sha256hash = Hex.encodeHexString(digest); 
-        java.nio.file.Path outputPath = Paths.get(DATA_DIR, sha256hash);
+        if (identifierAlgo.equals(IdentifierAlgorithm.SHA256)) {
+            digest = sha256.digest();
+        } else {
+            digest = ((HMACInputStream) wrappedInputStream).getDigest();
+        }
+        
+        String hexadecimalHash = Hex.encodeHexString(digest);
+        java.nio.file.Path outputPath = Paths.get(DATA_DIR, hexadecimalHash);
         
         // TODO: verify that hash is correct, distribute to other replicas...
         
         // perform atomic rename on success
         Files.move(tempPath, outputPath, StandardCopyOption.ATOMIC_MOVE);
-        return sha256hash;
+        return hexadecimalHash;
     }
     
     /** Update an existing item in the distributed hash table */
