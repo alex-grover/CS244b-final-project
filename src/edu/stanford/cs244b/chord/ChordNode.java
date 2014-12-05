@@ -1,6 +1,11 @@
 package edu.stanford.cs244b.chord;
 
+import java.io.InputStream;
 import java.net.InetAddress;
+import java.rmi.RemoteException;
+import java.rmi.server.UnicastRemoteObject;
+
+import javax.ws.rs.core.Response;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -10,7 +15,7 @@ import edu.stanford.cs244b.Util;
 
 /** Core components of the Chord distributed hash table implementation.
  *  Keeps track of other shards in the ring to ensure O(log n) lookup */
-public class ChordNode {
+public class ChordNode extends UnicastRemoteObject implements RemoteInterface {
     final static int NUM_FINGERS = 32;
     final static Logger logger = LoggerFactory.getLogger(ChordNode.class);
     
@@ -27,7 +32,7 @@ public class ChordNode {
      *  TODO: keep pointer to all log(n) nodes as required by Chord. */
     protected ChordNode[] fingerTable;
         
-    public ChordNode(InetAddress host, int port) {
+    public ChordNode(InetAddress host, int port) throws RemoteException {
         this.host = host;
         this.port = port;
         this.shardid = Shard.inetAddressToShardId(host);
@@ -158,4 +163,19 @@ public class ChordNode {
     public String toString() {
         return "shardid="+shardIdAsHex()+" @"+host;
     }
+
+    /** Remote method to accept POST request from another server in Chord ring **/
+	@Override
+	public String forwardRequest(final InputStream uploadInputStream) throws RemoteException {
+		// TODO: Call shard.insertItem with the data given
+		return "";
+	}
+
+	/** Remote method to return item if comtained on this server **/
+	@Override
+	public Response getRemoteItem(String sha256hash) throws RemoteException {
+		// TODO: Return object from shard if exists or forward GET
+		// to next node in the finger table
+		return null;
+	}
 }
