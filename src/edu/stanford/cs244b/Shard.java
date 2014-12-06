@@ -25,12 +25,17 @@ import com.wordnik.swagger.annotations.Api;
 import com.wordnik.swagger.annotations.ApiOperation;
 
 import edu.stanford.cs244b.ChordConfiguration.Chord;
+import edu.stanford.cs244b.chord.ChordInterface;
+import edu.stanford.cs244b.chord.ChordNode;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.rmi.registry.LocateRegistry;
+import java.rmi.registry.Registry;
+import java.rmi.server.UnicastRemoteObject;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -53,6 +58,8 @@ import java.util.concurrent.atomic.AtomicLong;
 @Api("/shard")
 // TODO: return JSON? or some binary format like protobuf?
 public class Shard {
+	private ChordNode node;
+	
     final static Logger logger = LoggerFactory.getLogger(Shard.class);
     
     private final int shardId;
@@ -79,6 +86,18 @@ public class Shard {
             logger.info("Chord entryHost is loopback address, creating new Chord ring");
         } else {
             logger.info("Attempting to join Chord ring host="+hostToJoin+" port="+portToJoin);
+        }
+        
+        // initialize Chord node and join ring
+        try {
+        	// TODO: allow user to specify ports
+        	node = new ChordNode(serverIP, portToJoin);
+        	
+        	// TODO: join existing ring
+        	node.join(node, true);
+        } catch (Exception e) {
+        	e.printStackTrace();
+        	System.exit(1);
         }
         
         this.counter = new AtomicLong();
