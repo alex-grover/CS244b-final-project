@@ -15,7 +15,7 @@ import edu.stanford.cs244b.Util;
 
 /** Core components of the Chord distributed hash table implementation.
  *  Keeps track of other shards in the ring to ensure O(log n) lookup */
-public class ChordNode extends UnicastRemoteObject implements RemoteInterface {
+public class ChordNode extends UnicastRemoteObject implements RemoteChordNodeI {
     final static int NUM_FINGERS = 32;
     final static Logger logger = LoggerFactory.getLogger(ChordNode.class);
     
@@ -25,12 +25,12 @@ public class ChordNode extends UnicastRemoteObject implements RemoteInterface {
     
     /** Pointer to immediate predecessor, can be used to walk
      *  counterclockwise around the identifier circle */
-    protected ChordNode predecessor;
+    protected RemoteChordNodeI predecessor;
     
     /** In initial Chord implementation, only maintain a pointer to
      *  the direct successor for simplicity.
      *  TODO: keep pointer to all log(n) nodes as required by Chord. */
-    protected ChordNode[] fingerTable;
+    protected RemoteChordNodeI[] fingerTable;
         
     public ChordNode(InetAddress host, int port) throws RemoteException {
         this.host = host;
@@ -42,9 +42,24 @@ public class ChordNode extends UnicastRemoteObject implements RemoteInterface {
         }
     }
     
-    /** Successor is first entry in the fingerTable */
-    public ChordNode getSuccessor() {
+    @Override
+    public int getShardId() {
+        return this.shardid;
+    }
+    
+    @Override
+    public RemoteChordNodeI getSuccessor() {
         return fingerTable[0];
+    }
+    
+    @Override
+    public RemoteChordNodeI getPredecessor() {
+        return predecessor;
+    }
+    
+    @Override
+    public void setPredecessor(RemoteChordNodeI newPredecessor) {
+        this.predecessor = newPredecessor;
     }
     
     /** When node <i>n</i> joins the network:
@@ -80,50 +95,60 @@ public class ChordNode extends UnicastRemoteObject implements RemoteInterface {
         // TODO: this seems wrong, since finger table is not yet initialized for new node which is just joining...
         //fingerTable[0] = existingNode.findSuccessor(fingerTable[0].shardid);
         // temporary workaround:
-        fingerTable[0] = existingNode.findSuccessor(shardid);
-        predecessor = getSuccessor().predecessor;
-        getSuccessor().predecessor = this;
-        logger.info("InitFingerTable, predecessor= "+predecessor+
-                "\ncurrent="+this+
-                "\nsuccessor="+getSuccessor());
-        // update fingers
-        for (int index=0; index < NUM_FINGERS-1; index++) {
-            if (Util.withinInterval(fingerTable[index+1].shardid, shardid, fingerTable[index].shardid)) {
-                fingerTable[index+1] = fingerTable[index];
-            } else {
-                fingerTable[index+1] = existingNode.findSuccessor(fingerTable[index+1].shardid);
-                //if (!Util.withinInterval(fingerTable[index+1].shardid, shardid, fingerTable[index].shardid)) {
+        try {
+            fingerTable[0] = existingNode.findSuccessor(shardid);
+            predecessor = getSuccessor().getPredecessor();
+            getSuccessor().setPredecessor(this);
+            logger.info("InitFingerTable, predecessor= "+predecessor+
+                    "\ncurrent="+this+
+                    "\nsuccessor="+getSuccessor());
+            // update fingers
+            for (int index=0; index < NUM_FINGERS-1; index++) {
+                if (Util.withinInterval(fingerTable[index+1].getShardId(), shardid, fingerTable[index].getShardId())) {
+                    fingerTable[index+1] = fingerTable[index];
+                } else {
+                    fingerTable[index+1] = existingNode.findSuccessor(fingerTable[index+1].getShardId());
+                    //if (!Util.withinInterval(fingerTable[index+1].shardid, shardid, fingerTable[index].shardid)) {
+                }
             }
+            return true;
+        } catch (RemoteException e) {
+            logger.error("Failed to initFingerTable", e);
+            return false;
         }
-        return true;
     }
     
-    public ChordNode findSuccessor(int identifier) {
-        ChordNode next = findPredecessor(identifier);
+    @Override
+    public RemoteChordNodeI findSuccessor(int identifier) throws RemoteException {
+        RemoteChordNodeI next = findPredecessor(identifier);
         return next.getSuccessor();
     }
     
-    /** Contact a series of nodes moving forward around the Chord circle
-     *  towards the identifier
-     */
-    public ChordNode findPredecessor(int identifier) {
-        ChordNode next = this;
-        logger.info("FindPredecessor for id="+Integer.toHexString(identifier)+" next_shardid="+next.shardIdAsHex());
-        while (!Util.withinInterval(identifier, next.shardid+1, next.getSuccessor().shardid+1)) {
+    @Override
+    public RemoteChordNodeI findPredecessor(int identifier) throws RemoteException {
+        RemoteChordNodeI next = this;
+        logger.info("FindPredecessor for id="+Integer.toHexString(identifier)+" next_shardid="+Integer.toHexString(next.getShardId()));
+        while (!Util.withinInterval(identifier, next.getShardId()+1, next.getSuccessor().getShardId()+1)) {
             next = next.closestPrecedingFinger(identifier);
-            logger.info("FindPredecessor for id="+Integer.toHexString(identifier)+" next_shardid="+next.shardIdAsHex());
+            logger.info("FindPredecessor for id="+Integer.toHexString(identifier)+" next_shardid="+Integer.toHexString(next.getShardId()));
         }
         return next;
         
     }
     
-    /** Return closest preceding id */
-    public ChordNode closestPrecedingFinger(int identifier) {
-        ChordNode successor = this.getSuccessor();
-        // lookup in finger tree
+    @Override
+    public RemoteChordNodeI closestPrecedingFinger(int identifier) {
+        
+        RemoteChordNodeI successor = this.getSuccessor();
+        // lookup in finger tree 
         for (int index = NUM_FINGERS-1; index >= 0; index--) {
-            if (Util.withinInterval(fingerTable[index].shardid, shardid+1, identifier)) {
-                return fingerTable[index];
+            try {
+                if (Util.withinInterval(fingerTable[index].getShardId(), shardid+1, identifier)) {
+                    return fingerTable[index];
+                }
+            } catch (RemoteException e) {
+                logger.error("closestPrecedingFinger failed to lookup finger", e);
+                // TODO: howto deal with lookup failure until fixFingers runs?
             }
         }
         return this;
@@ -136,20 +161,29 @@ public class ChordNode extends UnicastRemoteObject implements RemoteInterface {
             // shardid+1 to fix shadow bug (updateOthers fails to update immediate predecessor
             // of a newly joined node if that predecessor occupied the slot right behind it.
             int fingerValue = (shardid - (1 << index))+1;
-            ChordNode p = findPredecessor(fingerValue);
-            p.updateFingerTable(this, index);
+            try {
+                RemoteChordNodeI p = findPredecessor(fingerValue);
+                p.updateFingerTable(this, index);
+            } catch (RemoteException e) {
+                logger.error("Failed to updateOthers", e);
+                // wait for fixFingers to update in future.
+            }
         }
     }
     
-    /** If ChordNode s is the i'th finger of this ChordNode, update fingerTable */
+    @Override
     public boolean updateFingerTable(ChordNode s, int index) {
         if (s.shardid == this.shardid) {
             return true;
         }
-        if (Util.withinInterval(s.shardid, shardid, fingerTable[index].shardid)) {
-            fingerTable[index] = s;
-            ChordNode p = predecessor;
-            p.updateFingerTable(s, index);
+        try {
+            if (Util.withinInterval(s.shardid, shardid, fingerTable[index].getShardId())) {
+                fingerTable[index] = s;
+                RemoteChordNodeI p = predecessor;
+                p.updateFingerTable(s, index);
+            }
+        } catch (RemoteException e) {
+            logger.error("Failed to updateFingerTable", e);
         }
         return true;
     }
@@ -164,18 +198,18 @@ public class ChordNode extends UnicastRemoteObject implements RemoteInterface {
         return "shardid="+shardIdAsHex()+" @"+host;
     }
 
-    /** Remote method to accept POST request from another server in Chord ring **/
+    /** Remote method to accept POST request from another server in Chord ring
 	@Override
 	public String forwardRequest(final InputStream uploadInputStream) throws RemoteException {
 		// TODO: Call shard.insertItem with the data given
 		return "";
-	}
+	}*/
 
-	/** Remote method to return item if comtained on this server **/
+	/** Remote method to return item if contained on this server 
 	@Override
-	public Response getRemoteItem(String sha256hash) throws RemoteException {
+	public Response getRemoteItem(String identifier) throws RemoteException {
 		// TODO: Return object from shard if exists or forward GET
 		// to next node in the finger table
 		return null;
-	}
+	}*/
 }
