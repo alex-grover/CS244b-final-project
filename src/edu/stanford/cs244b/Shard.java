@@ -126,15 +126,13 @@ public class Shard {
             //Registry registry = LocateRegistry.createRegistry(serverConfig.getPort());
             
             node = new ChordNode(myIP, myPort);
-            //if (hostToJoin.isLoopbackAddress()) {
-            //if (portToJoin == 8081) { // hardcoded for 2-node ring
-            if (hostToJoin.equals(myIP) && portToJoin==myPort) {            
+            if ((hostToJoin.isLoopbackAddress() || hostToJoin.equals(myIP)) && portToJoin==myPort) {            
                 logger.info("Creating new Chord ring");
                 node.join(node, true);
             } else {
                 logger.info("Attempting to join Chord ring host="+hostToJoin+" port="+portToJoin);
                 Registry registry = LocateRegistry.getRegistry();
-                ChordNode existingNode = (ChordNode) registry.lookup(String.valueOf(portToJoin));
+                RemoteChordNodeI existingNode = (RemoteChordNodeI) registry.lookup(String.valueOf(portToJoin));
                 node.join(existingNode, false);
             }
             

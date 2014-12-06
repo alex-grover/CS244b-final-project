@@ -1,5 +1,6 @@
 package edu.stanford.cs244b.chord;
 
+import java.net.InetAddress;
 import java.rmi.Remote;
 import java.rmi.RemoteException;
 
@@ -7,6 +8,9 @@ public interface RemoteChordNodeI extends Remote {
 
     /** Return the identifier of this ChordNode */
     int getShardId() throws RemoteException;
+    
+    /** Return ip address associated with this ChordNode */
+    InetAddress getHost() throws RemoteException;
     
     /** Successor is first entry in the fingerTable */
     RemoteChordNodeI getSuccessor() throws RemoteException;

@@ -70,6 +70,11 @@ public class ChordNode implements RemoteChordNodeI {
     }
     
     @Override
+    public InetAddress getHost() {
+        return this.host;
+    }
+    
+    @Override
     public RemoteChordNodeI getSuccessor() {
         return fingerTable[0];
     }
@@ -92,33 +97,41 @@ public class ChordNode implements RemoteChordNodeI {
      *  </ol>
      *  Returns true if join succeeded, false otherwise
      */
-    public boolean join(ChordNode existingNode, boolean isFirstNode) {
-        if (isFirstNode) {
-            logger.info("Joining new ring, I am first node: "+existingNode.host+" shardid="+existingNode.shardIdAsHex());
-            // TODO: initialize full finger table; for now we only keep track of successor
-            fingerTable = new ChordNode[NUM_FINGERS];
-            for (int index=0; index < NUM_FINGERS; index++) {
-                fingerTable[index] = existingNode;
+    public boolean join(RemoteChordNodeI existingNode, boolean isFirstNode) {
+        try {
+            if (isFirstNode) {
+                logger.info("Joining new ring, I am first node: "+existingNode.getHost()+" shardid="+Integer.toHexString(existingNode.getShardId()));
+                // TODO: initialize full finger table; for now we only keep track of successor
+                fingerTable = new ChordNode[NUM_FINGERS];
+                for (int index=0; index < NUM_FINGERS; index++) {
+                    fingerTable[index] = existingNode;
+                }
+                predecessor = existingNode;
+            } else {
+                logger.info("Joining existing ring, querying node: "+existingNode.getHost()+" shardid="+Integer.toHexString(existingNode.getShardId()));
+                // TODO: reenable remote procedure call here
+                //initFingerTable(existingNode);
+                updateOthers();
             }
-            predecessor = existingNode;
-        } else {
-            logger.info("Joining existing ring, querying node: "+existingNode.host+" shardid="+existingNode.shardIdAsHex());
-            // TODO: invoke remote procedure call here
-            initFingerTable(existingNode);
-            updateOthers();
+            return true;
+        } catch (RemoteException e) {
+            logger.error("Failed to complete join", e);
+            return false;
         }
-        return true;
     }
     
     /** Initialize finger table of local node.
      *  existingNode is an arbitrary node already on the network
      */
-    public boolean initFingerTable(ChordNode existingNode) {
+    public boolean initFingerTable(RemoteChordNodeI existingNode) {
         // TODO: this seems wrong, since finger table is not yet initialized for new node which is just joining...
         //fingerTable[0] = existingNode.findSuccessor(fingerTable[0].shardid);
         // temporary workaround:
         try {
-            fingerTable[0] = existingNode.findSuccessor(shardid);
+            RemoteChordNodeI succ = existingNode.findSuccessor(shardid);
+            // TODO: this fails with java.lang.ArrayStoreException
+            // since RemoteChordNodeI returns a proxy, not the actual thing
+            fingerTable[0] = succ;
             predecessor = getSuccessor().getPredecessor();
             getSuccessor().setPredecessor(this);
             logger.info("InitFingerTable, predecessor= "+predecessor+
