@@ -119,10 +119,18 @@ public class Shard {
         // initialize Chord node and join ring
         try {
         	// TODO: allow user to specify ports
-        	node = new ChordNode(serverIP, portToJoin);
+//        	node = new ChordNode(serverIP, portToJoin);
+        	node = new ChordNode(InetAddress.getByName("localhost"), portToJoin);
         	
         	// TODO: join existing ring
-        	node.join(node, true);
+        	boolean first = (portToJoin == 8081); // hardcoded for 2-node ring
+        	if (!first) {
+        		Registry registry = LocateRegistry.getRegistry();
+        		ChordInterface existingNode = (ChordInterface) registry.lookup("8081");
+        		node.join(existingNode, false);
+        	} else {
+        		node.join(node, first);
+        	}
         } catch (Exception e) {
         	e.printStackTrace();
         	System.exit(1);
