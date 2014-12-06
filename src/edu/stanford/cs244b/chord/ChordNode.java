@@ -27,12 +27,12 @@ public class ChordNode extends UnicastRemoteObject implements ChordInterface {
     
     /** Pointer to immediate predecessor, can be used to walk
      *  counterclockwise around the identifier circle */
-    protected ChordNode predecessor;
+    protected ChordInterface predecessor;
     
     /** In initial Chord implementation, only maintain a pointer to
      *  the direct successor for simplicity.
      *  TODO: keep pointer to all log(n) nodes as required by Chord. */
-    protected ChordNode[] fingerTable;
+    protected ChordInterface[] fingerTable;
         
     public ChordNode(InetAddress host, int port) throws RemoteException {
         this.host = host;
@@ -50,27 +50,27 @@ public class ChordNode extends UnicastRemoteObject implements ChordInterface {
         }
     }
     
-    public ChordNode getSuccessor() throws RemoteException {
+    public ChordInterface getSuccessor() throws RemoteException {
         return fingerTable[0];
     }
     
-    public ChordNode findSuccessor(int identifier) throws RemoteException {
-        ChordNode next = findPredecessor(identifier);
+    public ChordInterface findSuccessor(int identifier) throws RemoteException {
+        ChordInterface next = findPredecessor(identifier);
         return next.getSuccessor();
     }
     
-    public ChordNode findPredecessor(int identifier) throws RemoteException {
-        ChordNode next = this;
-        logger.info("FindPredecessor for id="+Integer.toHexString(identifier)+" next_shardid="+next.shardIdAsHex());
-        while (!Util.withinInterval(identifier, next.shardid, next.getSuccessor().shardid)) {
+    public ChordInterface findPredecessor(int identifier) throws RemoteException {
+        ChordInterface next = this;
+        logger.info("FindPredecessor for id="+Integer.toHexString(identifier)+" next_shardid="+shardIdAsHex());
+        while (!Util.withinInterval(identifier, next.getShardId(), next.getSuccessor().getShardId())) {
             next = next.closestPrecedingFinger(identifier);
-            logger.info("FindPredecessor for id="+Integer.toHexString(identifier)+" next_shardid="+next.shardIdAsHex());
+            logger.info("FindPredecessor for id="+Integer.toHexString(identifier)+" next_shardid="+next.getShardId());
         }
         return next;
         
     }
     
-    public ChordNode closestPrecedingFinger(int identifier) throws RemoteException {
+    public ChordInterface closestPrecedingFinger(int identifier) throws RemoteException {
         // TODO: lookup in finger tree
         // for now, just return successor node
         return this.getSuccessor();
@@ -84,15 +84,15 @@ public class ChordNode extends UnicastRemoteObject implements ChordInterface {
      *  </ol>
      *  Returns true if join succeeded, false otherwise
      */
-    public boolean join(ChordNode existingNode, boolean isFirstNode) throws RemoteException {
+    public boolean join(ChordInterface existingNode, boolean isFirstNode) throws RemoteException {
     	// TODO: look up all other objects in ring in registry
         if (isFirstNode) {
-            logger.info("Joining new ring, I am first node: "+existingNode.host+" shardid="+existingNode.shardIdAsHex());
+            logger.info("Joining new ring, I am first node: "+existingNode.getHost()+" shardid="+existingNode.getShardId());
             // TODO: initialize full finger table; for now we only keep track of successor
-            fingerTable = new ChordNode[] { existingNode };
+            fingerTable = new ChordInterface[] { existingNode };
             predecessor = existingNode;
         } else {
-            logger.info("Joining existing ring, querying node: "+existingNode.host+" shardid="+existingNode.shardIdAsHex());
+            logger.info("Joining existing ring, querying node: "+existingNode.getHost()+" shardid="+existingNode.getShardId());
             // TODO: invoke remote procedure call here
             initFingerTable(existingNode);
             updateOthers();
@@ -100,13 +100,13 @@ public class ChordNode extends UnicastRemoteObject implements ChordInterface {
         return true;
     }
     
-    public boolean initFingerTable(ChordNode existingNode) throws RemoteException {
+    public boolean initFingerTable(ChordInterface existingNode) throws RemoteException {
         // TODO: this seems wrong, since finger table is not yet initialized for new node which is just joining...
         // fingerTable[0] = existingNode.findSuccessor(fingerTable[0].shardid);
         // temporary workaround:
         fingerTable[0] = existingNode.findSuccessor(shardid);
-        predecessor = getSuccessor().predecessor;
-        getSuccessor().predecessor = this;
+        predecessor = getSuccessor().getPredecessor();
+        getSuccessor().setPredecessor(this);
         logger.info("InitFingerTable, predecessor= "+predecessor+
                 "\ncurrent="+this+
                 "\nsuccessor="+getSuccessor());
@@ -119,29 +119,46 @@ public class ChordNode extends UnicastRemoteObject implements ChordInterface {
     public void updateOthers() throws RemoteException {
         for (int index=0; index < NUM_FINGERS; index++) {
             // find last node p whose i'th finger might be n
-            ChordNode p = findPredecessor(shardid - (1 << index));
+        	ChordInterface p = findPredecessor(shardid - (1 << index));
             p.updateFingerTable(this, index);
         }
     }
     
-    public boolean updateFingerTable(ChordNode s, int index) throws RemoteException {
-        if (s.shardid == this.shardid) {
+    public boolean updateFingerTable(ChordInterface s, int index) throws RemoteException {
+    	int remoteShardId = s.getShardId();
+        if (remoteShardId == this.shardid) {
             return true;
         }
-        if (Util.withinInterval(s.shardid, shardid, fingerTable[index].shardid)) {
+        if (Util.withinInterval(remoteShardId, shardid, fingerTable[index].getShardId())) {
             fingerTable[index] = s;
-            ChordNode p = predecessor;
+            ChordInterface p = predecessor;
             p.updateFingerTable(s, index);
         }
         return true;
     }
     
-    public boolean leave() throws RemoteException {
-    	return false;
+    public void leave() throws RemoteException {
+    	// TODO: implement this
     }
     
-    public boolean removeNode(ChordNode node, int index, ChordNode replacement) throws RemoteException {
-    	return false;
+    public void removeNode(ChordInterface node, int index, ChordInterface replacement) throws RemoteException {
+    	// TODO: implement this
+    }
+    
+    public InetAddress getHost() throws RemoteException {
+    	return host;
+    }
+    
+    public int getShardId() throws RemoteException {
+    	return shardid;
+    }
+    
+    public ChordInterface getPredecessor() throws RemoteException {
+    	return predecessor;
+    }
+    
+    public void setPredecessor(ChordInterface predecessor) throws RemoteException {
+    	this.predecessor = predecessor;
     }
     
     /** Convenience method for displaying shardid as a hex string */
