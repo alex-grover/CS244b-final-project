@@ -2,6 +2,7 @@ package edu.stanford.cs244b.chord;
 
 import java.io.InputStream;
 import java.net.InetAddress;
+import java.rmi.Remote;
 import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
@@ -17,7 +18,7 @@ import edu.stanford.cs244b.Util;
 
 /** Core components of the Chord distributed hash table implementation.
  *  Keeps track of other shards in the ring to ensure O(log n) lookup */
-public class ChordNode extends UnicastRemoteObject implements ChordInterface {
+public class ChordNode implements ChordInterface {
     final static int NUM_FINGERS = 1;
     final static Logger logger = LoggerFactory.getLogger(ChordNode.class);
     
@@ -38,15 +39,24 @@ public class ChordNode extends UnicastRemoteObject implements ChordInterface {
         this.host = host;
         this.port = port;
         this.shardid = Shard.inetAddressToShardId(host);
-        fingerTable = new ChordNode[NUM_FINGERS];
+        fingerTable = new ChordInterface[NUM_FINGERS];
+        
+        Registry registry;
+        try {
+        	registry = LocateRegistry.createRegistry(1099);
+        } catch (Exception e) {
+        	registry = LocateRegistry.getRegistry();
+        }
         
         try {
         	// insert ChordNode into RMI registry
         	ChordInterface stub = (ChordInterface) UnicastRemoteObject.exportObject(this, 0);
-        	Registry registry = LocateRegistry.getRegistry();
-        	registry.bind(Integer.toString(shardid), stub);
+//        	registry.bind(Integer.toString(shardid), stub);
+        	System.out.println("\n\n\nBINDING TO REGISTRY AS "+Integer.toString(port)+"\n\n\n");
+        	registry.bind(Integer.toString(port), this); // using port to hardcode 2-node ring
         } catch (Exception e) {
         	logger.warn("Registering host "+host+" in Chord ring with shardId="+shardIdAsHex()+" FAILED");
+        	e.printStackTrace();
         }
     }
     
