@@ -20,6 +20,8 @@ import edu.stanford.cs244b.Util;
 /** Core components of the Chord distributed hash table implementation.
  *  Keeps track of other shards in the ring to ensure O(log n) lookup */
 public class ChordNode implements RemoteChordNodeI {
+    final static int RMI_PORT=1099;
+    
     //final static int NUM_FINGERS = 32;
     final static int NUM_FINGERS = 1;
     final static Logger logger = LoggerFactory.getLogger(ChordNode.class);
@@ -42,10 +44,11 @@ public class ChordNode implements RemoteChordNodeI {
         for (int index=0; index < NUM_FINGERS; index++) {
             fingerTable[index] = location;
         }
-        
+        String ipAddress=host.getHostAddress();
+        System.getProperties().put("java.rmi.server.hostname", ipAddress);
         Registry registry;
         try {
-        	registry = LocateRegistry.createRegistry(1099);
+        	registry = LocateRegistry.createRegistry(RMI_PORT);
         } catch (Exception e) {
         	registry = LocateRegistry.getRegistry();
         }
@@ -55,7 +58,8 @@ public class ChordNode implements RemoteChordNodeI {
         	RemoteChordNodeI stub = (RemoteChordNodeI) UnicastRemoteObject.exportObject(this, 0);
 //        	registry.bind(Integer.toString(shardid), stub);
         	System.out.println("\n\n\nBINDING TO REGISTRY AS "+Integer.toString(port)+"\n\n\n");
-        	registry.bind(Integer.toString(port), this); // using port to hardcode 2-node ring
+        	registry.bind(location.getRMIUrl(), this); // using port to hardcode 2-node ring
+        	
         } catch (Exception e) {
         	logger.warn("Registering host "+host+" in Chord ring with shardId="+shardIdAsHex()+" FAILED");
         	e.printStackTrace();
@@ -67,7 +71,7 @@ public class ChordNode implements RemoteChordNodeI {
         try {
             // OMG, figuring this out was painful...
             // http://euclid.nmu.edu/~rappleto/Classes/RMI/rmi-coding.html
-            String rmiURL = "rmi://"+remoteLocation.host.getHostAddress()+":"+remoteLocation.port+"/"+ChordNode.class.getCanonicalName();
+            String rmiURL = location.getRMIUrl();
             RemoteChordNodeI chordNode = (RemoteChordNodeI) Naming.lookup(rmiURL);
             Finger nodeLocation = chordNode.getLocation(); // verify that we can contact ChordNode at specified location
             return chordNode;

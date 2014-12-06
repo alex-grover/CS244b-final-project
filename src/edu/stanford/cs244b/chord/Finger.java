@@ -15,6 +15,10 @@ public class Finger {
         this.shardid = Shard.inetAddressToShardId(host);
     }
     
+    public String getRMIUrl() {
+        return "rmi://"+host.getHostAddress()+":"+port;
+    }
+    
     @Override
     public String toString() {
         return "shardid="+Integer.toHexString(shardid)+" @"+host+":"+port;

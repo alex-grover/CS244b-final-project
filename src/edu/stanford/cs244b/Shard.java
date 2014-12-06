@@ -31,6 +31,7 @@ import com.wordnik.swagger.annotations.ApiOperation;
 import edu.stanford.cs244b.ChordConfiguration.Chord;
 import edu.stanford.cs244b.crypto.HMACInputStream;
 import edu.stanford.cs244b.chord.ChordNode;
+import edu.stanford.cs244b.chord.Finger;
 import edu.stanford.cs244b.chord.RemoteChordNodeI;
 
 import java.net.InetAddress;
@@ -130,9 +131,10 @@ public class Shard {
                 logger.info("Creating new Chord ring");
                 node.join(node, true);
             } else {
-                logger.info("Attempting to join Chord ring host="+hostToJoin+" port="+portToJoin);
+                Finger locationToJoin = new Finger(hostToJoin, portToJoin);
+                logger.info("Attempting to join Chord ring host="+locationToJoin);
                 Registry registry = LocateRegistry.getRegistry();
-                RemoteChordNodeI existingNode = (RemoteChordNodeI) registry.lookup(String.valueOf(portToJoin));
+                RemoteChordNodeI existingNode = (RemoteChordNodeI) registry.lookup(locationToJoin.getRMIUrl());
                 node.join(existingNode, false);
             }
             
