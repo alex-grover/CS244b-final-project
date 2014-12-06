@@ -4,6 +4,8 @@ import java.io.InputStream;
 import java.net.InetAddress;
 import java.rmi.Remote;
 import java.rmi.RemoteException;
+import java.rmi.registry.LocateRegistry;
+import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
 
 import javax.ws.rs.core.Response;
@@ -16,7 +18,7 @@ import edu.stanford.cs244b.Util;
 
 /** Core components of the Chord distributed hash table implementation.
  *  Keeps track of other shards in the ring to ensure O(log n) lookup */
-public class ChordNode extends UnicastRemoteObject implements RemoteChordNodeI {
+public class ChordNode implements RemoteChordNodeI {
     //final static int NUM_FINGERS = 32;
     final static int NUM_FINGERS = 1;
     final static Logger logger = LoggerFactory.getLogger(ChordNode.class);
@@ -52,7 +54,7 @@ public class ChordNode extends UnicastRemoteObject implements RemoteChordNodeI {
         
         try {
         	// insert ChordNode into RMI registry
-        	ChordInterface stub = (ChordInterface) UnicastRemoteObject.exportObject(this, 0);
+        	RemoteChordNodeI stub = (RemoteChordNodeI) UnicastRemoteObject.exportObject(this, 0);
 //        	registry.bind(Integer.toString(shardid), stub);
         	System.out.println("\n\n\nBINDING TO REGISTRY AS "+Integer.toString(port)+"\n\n\n");
         	registry.bind(Integer.toString(port), this); // using port to hardcode 2-node ring

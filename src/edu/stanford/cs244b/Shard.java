@@ -1,5 +1,7 @@
 package edu.stanford.cs244b;
 
+import io.dropwizard.jetty.HttpConnectorFactory;
+
 import javax.crypto.KeyGenerator;
 import javax.crypto.spec.SecretKeySpec;
 import javax.ws.rs.GET;
@@ -28,8 +30,8 @@ import com.wordnik.swagger.annotations.ApiOperation;
 
 import edu.stanford.cs244b.ChordConfiguration.Chord;
 import edu.stanford.cs244b.crypto.HMACInputStream;
-import edu.stanford.cs244b.chord.ChordInterface;
 import edu.stanford.cs244b.chord.ChordNode;
+import edu.stanford.cs244b.chord.RemoteChordNodeI;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
@@ -77,15 +79,28 @@ public class Shard {
     private final int shardId;
     private final AtomicLong counter;
     
-    private final String KEY_FILE = "key.txt";
-    private final String TEMP_DIR = "temp";
-    private final String DATA_DIR = "data";
+    private final String KEY_FILE;
+    private final String TEMP_DIR;
+    private final String DATA_DIR;
     
     public IdentifierAlgorithm identifierAlgo;
     SecretKeySpec secretKey;
 
-    public Shard(Chord chordConfig) throws UnknownHostException, NoSuchAlgorithmException {
-        // create temporary directories for this shard
+    public Shard(Chord chordConfig, HttpConnectorFactory serverConfig) throws UnknownHostException, NoSuchAlgorithmException {
+        // get my IP address and port
+        InetAddress myIP = InetAddress.getLocalHost();
+        int myPort = serverConfig.getPort();
+        
+        // use first 32 bits for server id...
+        shardId = inetAddressToShardId(myIP);
+        String hexShardId = shardIdAsHex();
+        logger.info("Registering host "+myIP+" with shardId="+hexShardId);
+        
+        // create temporary directories and key for this shard
+        TEMP_DIR = "temp-"+hexShardId+"-"+myPort;
+        DATA_DIR = "data-"+hexShardId+"-"+myPort;
+        KEY_FILE = "key-"+hexShardId+"-"+myPort+".txt";
+        
         (new File(TEMP_DIR)).mkdir();
         (new File(DATA_DIR)).mkdir();
         
@@ -101,39 +116,31 @@ public class Shard {
         // load key from filesystem if it exists
         secretKey = readOrCreateSecretKey();
         
-        // get my IP address
-        InetAddress serverIP = InetAddress.getLocalHost();
-        // use first 32 bits for server id...
-        shardId = inetAddressToShardId(serverIP);
-        logger.info("Registering host "+serverIP+" in Chord ring with shardId="+shardIdAsHex());
-        
         // get IP address of node in chord ring where we begin the join process
         InetAddress hostToJoin = chordConfig.getEntryHost();
         int portToJoin = chordConfig.getEntryPort();
-        if (hostToJoin.isLoopbackAddress()) {
-            logger.info("Chord entryHost is loopback address, creating new Chord ring");
-        } else {
-            logger.info("Attempting to join Chord ring host="+hostToJoin+" port="+portToJoin);
-        }
         
-        // initialize Chord node and join ring
         try {
-        	// TODO: allow user to specify ports
-//        	node = new ChordNode(serverIP, portToJoin);
-        	node = new ChordNode(InetAddress.getByName("localhost"), portToJoin);
-        	
-        	// TODO: join existing ring
-        	boolean first = (portToJoin == 8081); // hardcoded for 2-node ring
-        	if (!first) {
-        		Registry registry = LocateRegistry.getRegistry();
-        		ChordInterface existingNode = (ChordInterface) registry.lookup("8081");
-        		node.join(existingNode, false);
-        	} else {
-        		node.join(node, first);
-        	}
+            // initialize Chord node and join ring
+            //logger.info("Starting ChordNode, registry listening on port "+serverConfig.getPort());
+            //Registry registry = LocateRegistry.createRegistry(serverConfig.getPort());
+            
+            node = new ChordNode(myIP, myPort);
+            //if (hostToJoin.isLoopbackAddress()) {
+            //if (portToJoin == 8081) { // hardcoded for 2-node ring
+            if (hostToJoin.equals(myIP) && portToJoin==myPort) {            
+                logger.info("Creating new Chord ring");
+                node.join(node, true);
+            } else {
+                logger.info("Attempting to join Chord ring host="+hostToJoin+" port="+portToJoin);
+                Registry registry = LocateRegistry.getRegistry();
+                ChordNode existingNode = (ChordNode) registry.lookup(String.valueOf(portToJoin));
+                node.join(existingNode, false);
+            }
+            
         } catch (Exception e) {
-        	e.printStackTrace();
-        	System.exit(1);
+            e.printStackTrace();
+            System.exit(1);
         }
         
         this.counter = new AtomicLong();
