@@ -69,8 +69,9 @@ import java.util.concurrent.atomic.AtomicLong;
 // TODO: return JSON? or some binary format like protobuf?
 public class Shard {
     public enum IdentifierAlgorithm {
-        SHA256,
-        HMAC_SHA256 // default
+        SHA256_NOVERIFY, // don't verify hash on read
+        SHA256, // verify hash on read
+        HMAC_SHA256 // use keyed message authentication code
     }
     
 	private ChordNode node;
@@ -110,7 +111,10 @@ public class Shard {
         (new File(DATA_DIR)).mkdir();
         
         // determine algorithm used to generate identifiers for objects added to chord ring
-        if (chordConfig.getIdentifier().toLowerCase().equals(IdentifierAlgorithm.SHA256.toString().toLowerCase())) {
+        String identifierAlgoName = chordConfig.getIdentifier().toLowerCase();
+        if (identifierAlgoName.equals(IdentifierAlgorithm.SHA256.toString().toLowerCase())) {
+            identifierAlgo = IdentifierAlgorithm.SHA256_NOVERIFY;
+        } else if (identifierAlgoName.equals(IdentifierAlgorithm.SHA256.toString().toLowerCase())) {
             identifierAlgo = IdentifierAlgorithm.SHA256;
         } else {
             identifierAlgo = IdentifierAlgorithm.HMAC_SHA256; // default
@@ -186,20 +190,22 @@ public class Shard {
         byte[] digest;
         InputStream wrappedInputStream;
         MessageDigest sha256 = MessageDigest.getInstance("SHA-256");
-        if (identifierAlgo.equals(IdentifierAlgorithm.SHA256)) {
-            wrappedInputStream = new DigestInputStream(uploadInputStream, sha256);
-        } else { // assume HMAC_SHA256
+        if (identifierAlgo.equals(IdentifierAlgorithm.HMAC_SHA256)) {
             wrappedInputStream = new HMACInputStream(uploadInputStream, secretKey);
+        } else {
+            // assume SHA256 or SHA256_NOVERIFY
+            wrappedInputStream = new DigestInputStream(uploadInputStream, sha256);
         }
         // write file to temporary location
         java.nio.file.Path tempPath = Paths.get(TEMP_DIR, UUID.randomUUID().toString());
         Files.copy(wrappedInputStream, tempPath);
         
-        // compute SHA-256 hash
-        if (identifierAlgo.equals(IdentifierAlgorithm.SHA256)) {
-            digest = sha256.digest();
-        } else {
+
+        if (identifierAlgo.equals(IdentifierAlgorithm.HMAC_SHA256)){
             digest = ((HMACInputStream) wrappedInputStream).getDigest();
+        } else {
+            // compute SHA-256 hash for both standard and noverify
+            digest = sha256.digest();
         }
         
         String hexadecimalHash = Hex.encodeHexString(digest);
@@ -217,19 +223,48 @@ public class Shard {
 
     /** Retrieve the item with the specified SHA-256 hash 
      * @throws DecoderException 
-     * @throws IOException */
+     * @throws IOException 
+     * @throws NoSuchAlgorithmException 
+     * @throws NoSuchProviderException 
+     * @throws InvalidKeyException */
     @GET
     @Timed
     @Produces(MediaType.APPLICATION_OCTET_STREAM)
     @Path("/{itemId}")
     @ApiOperation("Retrieve an item from this shard, or return 404 Not Found if it does not exist")
-    public Response getItem(@PathParam("itemId") String sha256hash) throws DecoderException, IOException {
-        byte[] id = Hex.decodeHex(sha256hash.toCharArray());
-        //Map<String, Object> results = recordRequest();
+    public Response getItem(@PathParam("itemId") String idString) throws DecoderException, IOException, NoSuchAlgorithmException, InvalidKeyException, NoSuchProviderException {
+        //byte[] id = Hex.decodeHex(idString.toCharArray());
+        Map<String, Object> results = recordRequest();
         // TODO: check that file is owned by this node, otherwise forward to next node per fingertable
-        java.nio.file.Path filePath = Paths.get(DATA_DIR, sha256hash);
+        MessageDigest sha256 = MessageDigest.getInstance("SHA-256");
+        java.nio.file.Path filePath = Paths.get(DATA_DIR, idString);
         if (Files.exists(filePath)) {
-            return Response.ok().entity(Files.newInputStream(filePath)).build();
+            byte[] digest = null;
+            InputStream downloadInputStream = Files.newInputStream(filePath);
+            // by default, just copy directly from file for IdentifierAlgorithm.SHA256_NOVERIFY
+            InputStream wrappedInputStream = downloadInputStream;
+            
+            if (identifierAlgo.equals(IdentifierAlgorithm.HMAC_SHA256)) {
+                wrappedInputStream = new HMACInputStream(downloadInputStream, secretKey);
+            } else if (identifierAlgo.equals(IdentifierAlgorithm.SHA256)) {
+                wrappedInputStream = new DigestInputStream(downloadInputStream, sha256);
+            }
+            
+            Response resp = Response.ok().entity(wrappedInputStream).build();
+            
+            if (identifierAlgo.equals(IdentifierAlgorithm.HMAC_SHA256)){
+                digest = ((HMACInputStream) wrappedInputStream).getDigest();     
+            } else if (identifierAlgo.equals(IdentifierAlgorithm.SHA256)) {
+                digest = sha256.digest();
+            }
+            
+            if (digest != null && !idString.equalsIgnoreCase(Hex.encodeHexString(digest))) {
+                results.put("error", "request for "+idString+" does not match computed checksum "+Hex.encodeHexString(digest));
+                return Response.status(Response.Status.GONE).
+                    type(MediaType.APPLICATION_JSON_TYPE).
+                    entity(results).build();
+            }
+            return resp;
         } else {
             return Responses.notFound().build();
         }
