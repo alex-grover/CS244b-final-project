@@ -37,4 +37,7 @@ public interface RemoteChordNodeI extends Remote {
 
     /** If ChordNode s is the i'th finger of this ChordNode, update fingerTable */
     public abstract boolean updateFingerTable(ChordNode s, int index) throws RemoteException;
+    
+    /** Remove node from finger table */
+    public abstract void removeNode(ChordNode node, int index, Finger replacement);
 }
