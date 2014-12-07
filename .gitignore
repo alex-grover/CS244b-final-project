@@ -2,7 +2,7 @@
 .settings
 .project
 bin
-data
-key.txt
+data*
+key*.txt
 target
-temp
+temp*
