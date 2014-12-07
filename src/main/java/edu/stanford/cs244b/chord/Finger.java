@@ -1,10 +1,11 @@
 package edu.stanford.cs244b.chord;
 
+import java.io.Serializable;
 import java.net.InetAddress;
 
 import edu.stanford.cs244b.Shard;
 
-public class Finger {
+public class Finger implements Serializable {
     public InetAddress host;
     public int port;
     public int shardid;
@@ -16,7 +17,7 @@ public class Finger {
     }
     
     public String getRMIUrl() {
-        return "rmi://"+host.getHostAddress()+":"+port;
+        return "rmi://"+host.getHostAddress()+":"+port+"/"+ChordNode.class.getCanonicalName();
     }
     
     @Override

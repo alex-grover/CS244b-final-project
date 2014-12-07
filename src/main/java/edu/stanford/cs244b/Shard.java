@@ -123,19 +123,13 @@ public class Shard {
         
         try {
             // initialize Chord node and join ring
-            //logger.info("Starting ChordNode, registry listening on port "+serverConfig.getPort());
-            //Registry registry = LocateRegistry.createRegistry(serverConfig.getPort());
-            
-            node = new ChordNode(myIP, myPort);
+            // note that RMI port is 1 higher than webserver port.
+            node = new ChordNode(myIP, myPort+1);
+            Finger locationToJoin = new Finger(hostToJoin, portToJoin+1);
             if ((hostToJoin.isLoopbackAddress() || hostToJoin.equals(myIP)) && portToJoin==myPort) {            
-                logger.info("Creating new Chord ring");
-                node.join(node, true);
+                node.join(locationToJoin, true);
             } else {
-                Finger locationToJoin = new Finger(hostToJoin, portToJoin);
-                logger.info("Attempting to join Chord ring host="+locationToJoin);
-                Registry registry = LocateRegistry.getRegistry();
-                RemoteChordNodeI existingNode = (RemoteChordNodeI) registry.lookup(locationToJoin.getRMIUrl());
-                node.join(existingNode, false);
+                node.join(locationToJoin, false);
             }
             
         } catch (Exception e) {

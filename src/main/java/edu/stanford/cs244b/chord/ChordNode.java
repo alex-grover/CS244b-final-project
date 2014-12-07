@@ -3,6 +3,7 @@ package edu.stanford.cs244b.chord;
 import java.io.InputStream;
 import java.net.InetAddress;
 import java.rmi.Naming;
+import java.rmi.NotBoundException;
 import java.rmi.Remote;
 import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
@@ -19,8 +20,8 @@ import edu.stanford.cs244b.Util;
 
 /** Core components of the Chord distributed hash table implementation.
  *  Keeps track of other shards in the ring to ensure O(log n) lookup */
-public class ChordNode implements RemoteChordNodeI {
-    final static int RMI_PORT=1099;
+public class ChordNode extends UnicastRemoteObject implements RemoteChordNodeI {
+    Registry registry;
     
     //final static int NUM_FINGERS = 32;
     final static int NUM_FINGERS = 1;
@@ -39,6 +40,7 @@ public class ChordNode implements RemoteChordNodeI {
     protected Finger[] fingerTable;
         
     public ChordNode(InetAddress host, int port) throws RemoteException {
+        super();
         this.location = new Finger(host, port);
         fingerTable = new Finger[NUM_FINGERS];
         for (int index=0; index < NUM_FINGERS; index++) {
@@ -46,22 +48,18 @@ public class ChordNode implements RemoteChordNodeI {
         }
         String ipAddress=host.getHostAddress();
         System.getProperties().put("java.rmi.server.hostname", ipAddress);
-        Registry registry;
         try {
-        	registry = LocateRegistry.createRegistry(RMI_PORT);
+        	registry = LocateRegistry.createRegistry(port);
         } catch (Exception e) {
         	registry = LocateRegistry.getRegistry();
         }
-        
         try {
         	// insert ChordNode into RMI registry
-        	RemoteChordNodeI stub = (RemoteChordNodeI) UnicastRemoteObject.exportObject(this, 0);
-//        	registry.bind(Integer.toString(shardid), stub);
-        	System.out.println("\n\n\nBINDING TO REGISTRY AS "+Integer.toString(port)+"\n\n\n");
-        	registry.bind(location.getRMIUrl(), this); // using port to hardcode 2-node ring
-        	
+            String rmiURL = location.getRMIUrl();
+        	logger.info("Binding to registry at "+rmiURL);
+        	Naming.rebind(rmiURL, this);
         } catch (Exception e) {
-        	logger.warn("Registering host "+host+" in Chord ring with shardId="+shardIdAsHex()+" FAILED");
+        	logger.error("Registering host "+host+" in Chord ring with shardId="+shardIdAsHex()+" FAILED");
         	e.printStackTrace();
         }
     }
@@ -119,8 +117,9 @@ public class ChordNode implements RemoteChordNodeI {
      *  </ol>
      *  Returns true if join succeeded, false otherwise
      */
-    public boolean join(RemoteChordNodeI existingNode, boolean isFirstNode) {
+    public boolean join(Finger existinglocation, boolean isFirstNode) {
         try {
+            RemoteChordNodeI existingNode = (RemoteChordNodeI) getChordNode(existinglocation);
             if (isFirstNode) {
                 logger.info("Joining new ring, I am first node: "+existingNode.getHost()+" shardid="+Integer.toHexString(existingNode.getShardId()));
                 // TODO: initialize full finger table; for now we only keep track of successor
@@ -138,8 +137,8 @@ public class ChordNode implements RemoteChordNodeI {
             return true;
         } catch (RemoteException e) {
             logger.error("Failed to complete join", e);
-            return false;
         }
+        return false;
     }
     
     /** Initialize finger table of local node.
