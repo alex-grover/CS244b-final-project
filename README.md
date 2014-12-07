@@ -45,10 +45,10 @@ You may modify the algorithm (SHA-256 hash or HMAC-SHA256 keyed message authenti
 
     vagrant up
 
-4. Wait for the 2 virtual machines to download and install the program, then login:
+4. Wait for the 2 virtual machines to download and load, then install the software on them:
+
+    ./deploy.sh
+
+5. Optionally, log into the virtual machine:
 
     vagrant ssh cs244b-1
-
-5. To refresh virtual machine:
-
-    vagrant provision
