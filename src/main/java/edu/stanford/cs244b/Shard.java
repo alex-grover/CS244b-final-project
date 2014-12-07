@@ -91,6 +91,10 @@ public class Shard {
         // get my IP address and port
         InetAddress myIP = InetAddress.getLocalHost();
         int myPort = serverConfig.getPort();
+        // temporary hack to enable running 2 instances on same machine
+        if (myPort == 8080) {
+            myIP = InetAddress.getLoopbackAddress();
+        }
         
         // use first 32 bits for server id...
         shardId = inetAddressToShardId(myIP);

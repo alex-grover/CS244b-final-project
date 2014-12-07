@@ -129,7 +129,7 @@ public class ChordNode extends UnicastRemoteObject implements RemoteChordNodeI {
                 }
                 predecessor = existingNode.getLocation();
             } else {
-                logger.info("Joining existing ring, querying node: "+existingNode.getHost()+" shardid="+Integer.toHexString(existingNode.getShardId()));
+                logger.info("Joining existing ring, querying node: "+existingNode.getLocation());
                 // TODO: reenable remote procedure call here
                 initFingerTable(existingNode);
                 updateOthers();

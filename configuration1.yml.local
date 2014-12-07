@@ -1,0 +1,20 @@
+server:
+  type: simple
+  applicationContextPath: /
+  connector:
+    type: http
+    port: 8080
+
+chord:
+  entryHost: 127.0.0.1
+  entryPort: 8080
+  identifier: sha256
+
+logging:
+  # Do not display log statements below this threshold to stdout.
+  # Can be OFF, ERROR, WARN, INFO, DEBUG, TRACE, or ALL.
+  level: INFO
+
+  # Settings for logging to stdout.
+  appenders:
+    - type: console
