@@ -123,9 +123,7 @@ public class Shard {
         
         try {
             // initialize Chord node and join ring
-            //logger.info("Starting ChordNode, registry listening on port "+serverConfig.getPort());
-            //Registry registry = LocateRegistry.createRegistry(serverConfig.getPort());
-            
+        	logger.info("Initializing Chord node. hostToJoin: "+hostToJoin.getHostAddress()+", my IP: "+myIP.getHostAddress());
             node = new ChordNode(myIP, myPort);
             if ((hostToJoin.isLoopbackAddress() || hostToJoin.equals(myIP)) && portToJoin==myPort) {            
                 logger.info("Creating new Chord ring");

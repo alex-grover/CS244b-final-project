@@ -61,8 +61,8 @@ public class ChordNode implements RemoteChordNodeI {
         try {
         	// insert ChordNode into RMI registry
         	RemoteChordNodeI stub = (RemoteChordNodeI) UnicastRemoteObject.exportObject(this, 0);
+        	logger.info("Inserting stub into RMI registry as "+location.getRMIUrl());
         	registry.bind(location.getRMIUrl(), stub);
-        	
         } catch (Exception e) {
         	logger.error("Registering ChordNode in RMI registry FAILED");
         	e.printStackTrace();
@@ -74,10 +74,17 @@ public class ChordNode implements RemoteChordNodeI {
         try {
             // OMG, figuring this out was painful...
             // http://euclid.nmu.edu/~rappleto/Classes/RMI/rmi-coding.html
-            String rmiURL = location.getRMIUrl();
-            RemoteChordNodeI chordNode = (RemoteChordNodeI) Naming.lookup(rmiURL);
-            Finger nodeLocation = chordNode.getLocation(); // verify that we can contact ChordNode at specified location
-            return chordNode;
+        	Registry registry = LocateRegistry.getRegistry(remoteLocation.host.getHostAddress());
+        	String rmiURL = remoteLocation.getRMIUrl();
+        	RemoteChordNodeI chordNode = (RemoteChordNodeI) registry.lookup(rmiURL);
+        	Finger nodeLocation = chordNode.getLocation();
+        	return chordNode;
+        	
+//        	String rmiURL = remoteLocation.getRMIUrl();
+//        	logger.info(">>>>>>>>>>"+rmiURL);
+//            RemoteChordNodeI chordNode = (RemoteChordNodeI) Naming.lookup(rmiURL); //////////// FAILS HERE
+//            Finger nodeLocation = chordNode.getLocation(); // verify that we can contact ChordNode at specified location
+//            return chordNode;
         } catch (Exception e) {
             logger.error("Failed to get remote ChordNode at location "+remoteLocation, e);
             throw new RemoteException("Failed to get remote ChordNode at location "+remoteLocation);
@@ -134,7 +141,6 @@ public class ChordNode implements RemoteChordNodeI {
                 predecessor = existingNode.getLocation();
             } else {
                 logger.info("Joining existing ring, querying node: "+existingNode.getHost()+" shardid="+Integer.toHexString(existingNode.getShardId()));
-                // TODO: reenable remote procedure call here by getting existing node's registry
                 initFingerTable(existingNode);
                 updateOthers();
             }

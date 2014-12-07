@@ -1,10 +1,11 @@
 package edu.stanford.cs244b.chord;
 
+import java.io.Serializable;
 import java.net.InetAddress;
 
 import edu.stanford.cs244b.Shard;
 
-public class Finger {
+public class Finger implements Serializable {
     public InetAddress host;
     public int port;
     public int shardid;
