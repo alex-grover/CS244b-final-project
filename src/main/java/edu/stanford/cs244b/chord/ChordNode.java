@@ -244,6 +244,42 @@ public class ChordNode extends UnicastRemoteObject implements RemoteChordNodeI {
         return true;
     }
     
+    public void leave() {
+    	if (this.location.host == predecessor.host) {
+    		return;
+    	}
+    	
+    	try {
+    		getChordNode(getSuccessor()).setPredecessor(predecessor);
+    	} catch (RemoteException e) {
+    		logger.error("Failed to set successor's predecessor", e);
+    	}
+    	
+    	for (int i=0; i < NUM_FINGERS; i++) {
+    		int fingerValue = (location.shardid - (1 << i))+1;
+    		
+    		try {
+    			RemoteChordNodeI p = findPredecessor(fingerValue);
+    			p.removeNode(this, i, getSuccessor());
+    		} catch (RemoteException e) {
+    			logger.error("Failed to find predecessor", e);
+    		}
+    		
+    	}
+    }
+    
+    @Override
+    public void removeNode(ChordNode node, int i, Finger replacement) {
+    	if (fingerTable[i].host == node.getLocation().host) {
+    		fingerTable[i] = replacement;
+    		try {
+    			getChordNode(predecessor).removeNode(node, i, replacement);
+    		} catch (RemoteException e) {
+    			logger.error("Failed to remove node from predecessor", e);
+    		}
+    	}
+    }
+    
     /** Convenience method for displaying shardid as a hex string */
     public String shardIdAsHex() {
         return Integer.toHexString(location.shardid);
