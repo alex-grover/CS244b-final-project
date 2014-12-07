@@ -17,6 +17,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   # Boot 2 virtual machines
   (1..2).each do |i|
     config.vm.define "cs244b-#{i}" do |s|
+      s.vm.provision "file", source: "configuration#{i}.yml", destination: "configuration#{i}.yml"
       #s.vm.hostname = "cs244b-#{i}"
       #s.vm.network "public_network", use_dhcp_assigned_default_route: true
       s.vm.network "private_network", ip: "192.168.50.#{i}", netmask: "255.255.255.0", virtualbox__intnet: "cs244b", drop_nat_interface_default_route: true

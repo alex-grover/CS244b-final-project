@@ -45,4 +45,10 @@ You may modify the algorithm (SHA-256 hash or HMAC-SHA256 keyed message authenti
 
     vagrant up
 
-4. Wait for the 2 virtual machines to download and install the program
+4. Wait for the 2 virtual machines to download and install the program, then login:
+
+    vagrant ssh cs244b-1
+
+5. To refresh virtual machine:
+
+    vagrant provision
