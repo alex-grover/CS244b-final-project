@@ -24,6 +24,9 @@ public interface RemoteChordNodeI extends Remote {
     /** Set reference to predecessor */
     void setPredecessor(Finger newPredecessor) throws RemoteException;
     
+    /** Notify node of request to become predecessor */
+    void notifyPredecessor(Finger newPredecessor) throws RemoteException;
+    
     /** Ask node to find the successor of the specified identifier */
     public abstract RemoteChordNodeI findSuccessor(int identifier) throws RemoteException;
 
@@ -34,9 +37,6 @@ public interface RemoteChordNodeI extends Remote {
 
     /** Return closest preceding id */
     public abstract RemoteChordNodeI closestPrecedingFinger(int identifier) throws RemoteException;
-
-    /** If ChordNode s is the i'th finger of this ChordNode, update fingerTable */
-    public abstract boolean updateFingerTable(ChordNode s, int index) throws RemoteException;
     
     /** Remove node from finger table */
     public abstract void removeNode(ChordNode node, int index, Finger replacement) throws RemoteException;

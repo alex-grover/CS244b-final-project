@@ -9,6 +9,7 @@ import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
+import java.util.Random;
 
 import javax.ws.rs.core.Response;
 
@@ -38,6 +39,8 @@ public class ChordNode extends UnicastRemoteObject implements RemoteChordNodeI {
      *  the direct successor for simplicity.
      *  TODO: keep pointer to all log(n) nodes as required by Chord. */
     protected Finger[] fingerTable;
+    
+    protected Stabilizer stabilizer;
         
     public ChordNode(InetAddress host, int port) throws RemoteException {
         super();
@@ -117,62 +120,50 @@ public class ChordNode extends UnicastRemoteObject implements RemoteChordNodeI {
      *  </ol>
      *  Returns true if join succeeded, false otherwise
      */
-    public boolean join(Finger existinglocation, boolean isFirstNode) {
-        try {
-            RemoteChordNodeI existingNode = (RemoteChordNodeI) getChordNode(existinglocation);
-            if (isFirstNode) {
-                logger.info("Joining new ring, I am first node: "+existingNode.getHost()+" shardid="+Integer.toHexString(existingNode.getShardId()));
-                // TODO: initialize full finger table; for now we only keep track of successor
-                fingerTable = new Finger[NUM_FINGERS];
-                for (int index=0; index < NUM_FINGERS; index++) {
-                    fingerTable[index] = existingNode.getLocation();
-                }
-                predecessor = existingNode.getLocation();
-            } else {
-                logger.info("Joining existing ring, querying node: "+existingNode.getLocation());
-                // TODO: reenable remote procedure call here
-                initFingerTable(existingNode);
-                updateOthers();
-            }
-            return true;
-        } catch (RemoteException e) {
-            logger.error("Failed to complete join", e);
-        }
-        return false;
+    public boolean join(Finger existingLocation, boolean isFirstNode) {
+    	try {
+    		predecessor = null;
+    		fingerTable[0] = getChordNode(existingLocation).findSuccessor(getShardId()).getLocation();
+    		stabilizer = new Stabilizer(this);
+    		stabilizer.start();
+    	} catch (RemoteException e) {
+    		logger.error("Failed to get successor", e);
+    	}
+    	return false;
     }
     
-    /** Initialize finger table of local node.
-     *  existingNode is an arbitrary node already on the network
-     */
-    public boolean initFingerTable(RemoteChordNodeI existingNode) {
-        // TODO: this seems wrong, since finger table is not yet initialized for new node which is just joining...
-        //fingerTable[0] = existingNode.findSuccessor(fingerTable[0].shardid);
-        // temporary workaround:
-        try {
-            //RemoteChordNodeI successor = existingNode.findSuccessor(location.shardid);
-            RemoteChordNodeI successor = findSuccessor(location.shardid);
-            // TODO: this fails with java.lang.ArrayStoreException
-            // since RemoteChordNodeI returns a proxy, not the actual thing
-            fingerTable[0] = successor.getLocation();
-            predecessor = getChordNode(getSuccessor()).getPredecessor();
-            getChordNode(getSuccessor()).setPredecessor(this.location);
-            logger.info("InitFingerTable, predecessor= "+predecessor+
-                    "\ncurrent="+this+
-                    "\nsuccessor="+getSuccessor());
-            // update fingers
-            for (int index=0; index < NUM_FINGERS-1; index++) {
-                if (Util.withinInterval(fingerTable[index+1].shardid, location.shardid, fingerTable[index].shardid)) {
-                    fingerTable[index+1] = fingerTable[index];
-                } else {
-                    fingerTable[index+1] = existingNode.findSuccessor(fingerTable[index+1].shardid).getLocation();
-                    //if (!Util.withinInterval(fingerTable[index+1].shardid, shardid, fingerTable[index].shardid)) {
-                }
-            }
-            return true;
-        } catch (RemoteException e) {
-            logger.error("Failed to initFingerTable", e);
-            return false;
-        }
+    /** Periodically run to verify successor relationship */
+    public void stabilize() {
+    	try {
+    		Finger x = getChordNode(getSuccessor()).getPredecessor();
+    		if (x != null && (x.host == location.host || x.host == getSuccessor().host)) {
+    			fingerTable[0] = x;
+    		}
+    		getChordNode(getSuccessor()).notifyPredecessor(location);
+    	} catch (RemoteException e) {
+    		logger.error("Failed to update and notify successor", e);
+    	}
+    }
+    
+    /** Notify node of request to become predecessor */
+    @Override
+    public void notifyPredecessor(Finger newPredecessor) {
+    	if (predecessor == null ||
+    		predecessor.host == newPredecessor.host ||
+    		predecessor.host == location.host) {
+    			predecessor = newPredecessor;
+    	}
+    }
+    
+    /** Choose a random node and update finger table */
+    public void fixFingers() {
+    	try {
+	    	Random rgen = new Random();
+	    	int i = rgen.nextInt(NUM_FINGERS);
+	    	fingerTable[i] = findSuccessor(fingerTable[i].shardid).getLocation();
+    	} catch (RemoteException e) {
+    		logger.error("Failed to update finger table", e);
+    	}
     }
     
     @Override
@@ -210,44 +201,13 @@ public class ChordNode extends UnicastRemoteObject implements RemoteChordNodeI {
         return this;
     }
     
-    /** Update all nodes whose finger tables should refer to n */
-    public void updateOthers() {
-        for (int index=0; index < NUM_FINGERS; index++) {
-            // find last node p whose i'th finger might be n
-            // shardid+1 to fix shadow bug (updateOthers fails to update immediate predecessor
-            // of a newly joined node if that predecessor occupied the slot right behind it.
-            int fingerValue = (location.shardid - (1 << index))+1;
-            try {
-                RemoteChordNodeI p = findPredecessor(fingerValue);
-                p.updateFingerTable(this, index);
-            } catch (RemoteException e) {
-                logger.error("Failed to updateOthers", e);
-                // wait for fixFingers to update in future.
-            }
-        }
-    }
-    
-    @Override
-    public boolean updateFingerTable(ChordNode s, int index) {
-        if (s.location.shardid == this.location.shardid) {
-            return true;
-        }
-        try {
-            if (Util.withinInterval(s.location.shardid, location.shardid, fingerTable[index].shardid)) {
-                fingerTable[index] = s.getLocation();
-                RemoteChordNodeI p = getChordNode(predecessor);
-                p.updateFingerTable(s, index);
-            }
-        } catch (RemoteException e) {
-            logger.error("Failed to updateFingerTable", e);
-        }
-        return true;
-    }
-    
+    /** Leave Chord ring and update other nodes */
     public void leave() {
     	if (this.location.host == predecessor.host) {
     		return;
     	}
+    	
+    	stabilizer.cancel();
     	
     	try {
     		getChordNode(getSuccessor()).setPredecessor(predecessor);
