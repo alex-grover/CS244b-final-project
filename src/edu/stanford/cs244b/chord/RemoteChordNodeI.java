@@ -6,6 +6,9 @@ import java.rmi.RemoteException;
 
 public interface RemoteChordNodeI extends Remote {
 
+    /** Return the location (ip address, port) of this ChordNode */
+    Finger getLocation() throws RemoteException;
+    
     /** Return the identifier of this ChordNode */
     int getShardId() throws RemoteException;
     
@@ -13,13 +16,13 @@ public interface RemoteChordNodeI extends Remote {
     InetAddress getHost() throws RemoteException;
     
     /** Successor is first entry in the fingerTable */
-    RemoteChordNodeI getSuccessor() throws RemoteException;
+    Finger getSuccessor() throws RemoteException;
     
     /** Obtain reference to predecessor */
-    RemoteChordNodeI getPredecessor() throws RemoteException;
+    Finger getPredecessor() throws RemoteException;
 
     /** Set reference to predecessor */
-    void setPredecessor(RemoteChordNodeI newPredecessor) throws RemoteException;
+    void setPredecessor(Finger newPredecessor) throws RemoteException;
     
     /** Ask node to find the successor of the specified identifier */
     public abstract RemoteChordNodeI findSuccessor(int identifier) throws RemoteException;

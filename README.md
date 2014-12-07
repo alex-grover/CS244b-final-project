@@ -37,3 +37,18 @@ You may modify the algorithm (SHA-256 hash or HMAC-SHA256 keyed message authenti
 
     -Ddw.chord.identifier=hmac_sha256
     -Ddw.chord.identifier=sha256
+
+## Running On Multiple Virtual Machines ##
+1. Download and install [Vagrant](https://www.vagrantup.com/downloads.html) and [VirtualBox](https://www.virtualbox.org/wiki/Downloads)
+2. Pull latest code from chord-feature branch
+3. In terminal, cd to the project directory, execute the following command:
+
+    vagrant up
+
+4. Wait for the 2 virtual machines to download and install the program, then login:
+
+    vagrant ssh cs244b-1
+
+5. To refresh virtual machine:
+
+    vagrant provision

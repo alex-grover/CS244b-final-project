@@ -2,6 +2,7 @@ package edu.stanford.cs244b.chord;
 
 import java.io.InputStream;
 import java.net.InetAddress;
+import java.rmi.Naming;
 import java.rmi.Remote;
 import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
@@ -19,36 +20,39 @@ import edu.stanford.cs244b.Util;
 /** Core components of the Chord distributed hash table implementation.
  *  Keeps track of other shards in the ring to ensure O(log n) lookup */
 public class ChordNode implements RemoteChordNodeI {
+	/** Port that RMI registry runs on */
+    final static int RMI_PORT=1099;
+    
     //final static int NUM_FINGERS = 32;
     final static int NUM_FINGERS = 1;
     final static Logger logger = LoggerFactory.getLogger(ChordNode.class);
     
-    protected InetAddress host;
-    protected int port;
-    protected int shardid;
+    /** Location of this ChordNode, includes host ip, port, and shardid */
+    protected Finger location;
     
     /** Pointer to immediate predecessor, can be used to walk
      *  counterclockwise around the identifier circle */
-    protected RemoteChordNodeI predecessor;
+    protected Finger predecessor;
     
     /** In initial Chord implementation, only maintain a pointer to
      *  the direct successor for simplicity.
      *  TODO: keep pointer to all log(n) nodes as required by Chord. */
-    protected RemoteChordNodeI[] fingerTable;
+    protected Finger[] fingerTable;
         
     public ChordNode(InetAddress host, int port) throws RemoteException {
-        this.host = host;
-        this.port = port;
-        this.shardid = Shard.inetAddressToShardId(host);
-        fingerTable = new ChordNode[NUM_FINGERS];
+        this.location = new Finger(host, port);
+        fingerTable = new Finger[NUM_FINGERS];
         for (int index=0; index < NUM_FINGERS; index++) {
-            fingerTable[index] = this;
+            fingerTable[index] = location;
         }
+        
+        String ipAddress=host.getHostAddress();
+        System.getProperties().put("java.rmi.server.hostname", ipAddress);
         
         // Create or get RMI registry
         Registry registry;
         try {
-        	registry = LocateRegistry.createRegistry(1099);
+        	registry = LocateRegistry.createRegistry(RMI_PORT);
         } catch (Exception e) {
         	logger.info("RMI registry already exists");
         	registry = LocateRegistry.getRegistry();
@@ -57,36 +61,56 @@ public class ChordNode implements RemoteChordNodeI {
         try {
         	// insert ChordNode into RMI registry
         	RemoteChordNodeI stub = (RemoteChordNodeI) UnicastRemoteObject.exportObject(this, 0);
-        	registry.bind(Integer.toString(port), stub);
-//        	registry.bind("RemoteChordNodeI", stub);
+        	registry.bind(location.getRMIUrl(), stub);
+        	
         } catch (Exception e) {
         	logger.error("Registering ChordNode in RMI registry FAILED");
         	e.printStackTrace();
         }
     }
     
+    /** Given a location, lookup the corresponding RemoteChordNodeI */
+    public RemoteChordNodeI getChordNode(Finger remoteLocation) throws RemoteException {
+        try {
+            // OMG, figuring this out was painful...
+            // http://euclid.nmu.edu/~rappleto/Classes/RMI/rmi-coding.html
+            String rmiURL = location.getRMIUrl();
+            RemoteChordNodeI chordNode = (RemoteChordNodeI) Naming.lookup(rmiURL);
+            Finger nodeLocation = chordNode.getLocation(); // verify that we can contact ChordNode at specified location
+            return chordNode;
+        } catch (Exception e) {
+            logger.error("Failed to get remote ChordNode at location "+remoteLocation, e);
+            throw new RemoteException("Failed to get remote ChordNode at location "+remoteLocation);
+        }
+    }
+    
+    @Override
+    public Finger getLocation() {
+        return this.location;
+    }
+    
     @Override
     public int getShardId() {
-        return this.shardid;
+        return this.location.shardid;
     }
     
     @Override
     public InetAddress getHost() {
-        return this.host;
+        return this.location.host;
     }
     
     @Override
-    public RemoteChordNodeI getSuccessor() {
+    public Finger getSuccessor() {
         return fingerTable[0];
     }
     
     @Override
-    public RemoteChordNodeI getPredecessor() {
+    public Finger getPredecessor() {
         return predecessor;
     }
     
     @Override
-    public void setPredecessor(RemoteChordNodeI newPredecessor) {
+    public void setPredecessor(Finger newPredecessor) {
         this.predecessor = newPredecessor;
     }
     
@@ -103,15 +127,15 @@ public class ChordNode implements RemoteChordNodeI {
             if (isFirstNode) {
                 logger.info("Joining new ring, I am first node: "+existingNode.getHost()+" shardid="+Integer.toHexString(existingNode.getShardId()));
                 // TODO: initialize full finger table; for now we only keep track of successor
-                fingerTable = new ChordNode[NUM_FINGERS];
+                fingerTable = new Finger[NUM_FINGERS];
                 for (int index=0; index < NUM_FINGERS; index++) {
-                    fingerTable[index] = existingNode;
+                    fingerTable[index] = existingNode.getLocation();
                 }
-                predecessor = existingNode;
+                predecessor = existingNode.getLocation();
             } else {
                 logger.info("Joining existing ring, querying node: "+existingNode.getHost()+" shardid="+Integer.toHexString(existingNode.getShardId()));
                 // TODO: reenable remote procedure call here by getting existing node's registry
-                //initFingerTable(existingNode);
+                initFingerTable(existingNode);
                 updateOthers();
             }
             return true;
@@ -129,21 +153,22 @@ public class ChordNode implements RemoteChordNodeI {
         //fingerTable[0] = existingNode.findSuccessor(fingerTable[0].shardid);
         // temporary workaround:
         try {
-            RemoteChordNodeI succ = existingNode.findSuccessor(shardid);
+            //RemoteChordNodeI successor = existingNode.findSuccessor(location.shardid);
+            RemoteChordNodeI successor = findSuccessor(location.shardid);
             // TODO: this fails with java.lang.ArrayStoreException
             // since RemoteChordNodeI returns a proxy, not the actual thing
-            fingerTable[0] = succ;
-            predecessor = getSuccessor().getPredecessor();
-            getSuccessor().setPredecessor(this);
+            fingerTable[0] = successor.getLocation();
+            predecessor = getChordNode(getSuccessor()).getPredecessor();
+            getChordNode(getSuccessor()).setPredecessor(this.location);
             logger.info("InitFingerTable, predecessor= "+predecessor+
                     "\ncurrent="+this+
                     "\nsuccessor="+getSuccessor());
             // update fingers
             for (int index=0; index < NUM_FINGERS-1; index++) {
-                if (Util.withinInterval(fingerTable[index+1].getShardId(), shardid, fingerTable[index].getShardId())) {
+                if (Util.withinInterval(fingerTable[index+1].shardid, location.shardid, fingerTable[index].shardid)) {
                     fingerTable[index+1] = fingerTable[index];
                 } else {
-                    fingerTable[index+1] = existingNode.findSuccessor(fingerTable[index+1].getShardId());
+                    fingerTable[index+1] = existingNode.findSuccessor(fingerTable[index+1].shardid).getLocation();
                     //if (!Util.withinInterval(fingerTable[index+1].shardid, shardid, fingerTable[index].shardid)) {
                 }
             }
@@ -157,14 +182,14 @@ public class ChordNode implements RemoteChordNodeI {
     @Override
     public RemoteChordNodeI findSuccessor(int identifier) throws RemoteException {
         RemoteChordNodeI next = findPredecessor(identifier);
-        return next.getSuccessor();
+        return getChordNode(next.getSuccessor());
     }
     
     @Override
     public RemoteChordNodeI findPredecessor(int identifier) throws RemoteException {
         RemoteChordNodeI next = this;
         logger.info("FindPredecessor for id="+Integer.toHexString(identifier)+" next_shardid="+Integer.toHexString(next.getShardId()));
-        while (!Util.withinInterval(identifier, next.getShardId()+1, next.getSuccessor().getShardId()+1)) {
+        while (!Util.withinInterval(identifier, next.getShardId()+1, next.getSuccessor().shardid+1)) {
             next = next.closestPrecedingFinger(identifier);
             logger.info("FindPredecessor for id="+Integer.toHexString(identifier)+" next_shardid="+Integer.toHexString(next.getShardId()));
         }
@@ -175,12 +200,11 @@ public class ChordNode implements RemoteChordNodeI {
     @Override
     public RemoteChordNodeI closestPrecedingFinger(int identifier) {
         
-        RemoteChordNodeI successor = this.getSuccessor();
         // lookup in finger tree 
         for (int index = NUM_FINGERS-1; index >= 0; index--) {
             try {
-                if (Util.withinInterval(fingerTable[index].getShardId(), shardid+1, identifier)) {
-                    return fingerTable[index];
+                if (Util.withinInterval(fingerTable[index].shardid, location.shardid+1, identifier)) {
+                    return getChordNode(fingerTable[index]);
                 }
             } catch (RemoteException e) {
                 logger.error("closestPrecedingFinger failed to lookup finger", e);
@@ -196,7 +220,7 @@ public class ChordNode implements RemoteChordNodeI {
             // find last node p whose i'th finger might be n
             // shardid+1 to fix shadow bug (updateOthers fails to update immediate predecessor
             // of a newly joined node if that predecessor occupied the slot right behind it.
-            int fingerValue = (shardid - (1 << index))+1;
+            int fingerValue = (location.shardid - (1 << index))+1;
             try {
                 RemoteChordNodeI p = findPredecessor(fingerValue);
                 p.updateFingerTable(this, index);
@@ -209,13 +233,13 @@ public class ChordNode implements RemoteChordNodeI {
     
     @Override
     public boolean updateFingerTable(ChordNode s, int index) {
-        if (s.shardid == this.shardid) {
+        if (s.location.shardid == this.location.shardid) {
             return true;
         }
         try {
-            if (Util.withinInterval(s.shardid, shardid, fingerTable[index].getShardId())) {
-                fingerTable[index] = s;
-                RemoteChordNodeI p = predecessor;
+            if (Util.withinInterval(s.location.shardid, location.shardid, fingerTable[index].shardid)) {
+                fingerTable[index] = s.getLocation();
+                RemoteChordNodeI p = getChordNode(predecessor);
                 p.updateFingerTable(s, index);
             }
         } catch (RemoteException e) {
@@ -226,12 +250,12 @@ public class ChordNode implements RemoteChordNodeI {
     
     /** Convenience method for displaying shardid as a hex string */
     public String shardIdAsHex() {
-        return Integer.toHexString(shardid);
+        return Integer.toHexString(location.shardid);
     }
     
     @Override
     public String toString() {
-        return "shardid="+shardIdAsHex()+" @"+host;
+        return location.toString();
     }
 
     /** Remote method to accept POST request from another server in Chord ring
