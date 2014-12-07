@@ -45,21 +45,22 @@ public class ChordNode implements RemoteChordNodeI {
             fingerTable[index] = this;
         }
         
+        // Create or get RMI registry
         Registry registry;
         try {
         	registry = LocateRegistry.createRegistry(1099);
         } catch (Exception e) {
+        	logger.info("RMI registry already exists");
         	registry = LocateRegistry.getRegistry();
         }
         
         try {
         	// insert ChordNode into RMI registry
         	RemoteChordNodeI stub = (RemoteChordNodeI) UnicastRemoteObject.exportObject(this, 0);
-//        	registry.bind(Integer.toString(shardid), stub);
-        	System.out.println("\n\n\nBINDING TO REGISTRY AS "+Integer.toString(port)+"\n\n\n");
-        	registry.bind(Integer.toString(port), this); // using port to hardcode 2-node ring
+        	registry.bind(Integer.toString(port), stub);
+//        	registry.bind("RemoteChordNodeI", stub);
         } catch (Exception e) {
-        	logger.warn("Registering host "+host+" in Chord ring with shardId="+shardIdAsHex()+" FAILED");
+        	logger.error("Registering ChordNode in RMI registry FAILED");
         	e.printStackTrace();
         }
     }
@@ -109,7 +110,7 @@ public class ChordNode implements RemoteChordNodeI {
                 predecessor = existingNode;
             } else {
                 logger.info("Joining existing ring, querying node: "+existingNode.getHost()+" shardid="+Integer.toHexString(existingNode.getShardId()));
-                // TODO: reenable remote procedure call here
+                // TODO: reenable remote procedure call here by getting existing node's registry
                 //initFingerTable(existingNode);
                 updateOthers();
             }
