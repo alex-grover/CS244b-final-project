@@ -9,7 +9,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     vb.customize ["modifyvm", :id, "--memory", "1024"]
     vb.gui = true
   end
-  config.vm.box = "denis/archlinux64"
+  config.vm.box = "ubuntu/trusty64"
   #config.vm.box_url = "https://github.com/akovacs/archlinux-vagrant-boxes.git"
   config.ssh.forward_agent = true
   config.vm.provision "shell", path: "scripts/bootstrap.sh"
