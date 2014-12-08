@@ -16,6 +16,7 @@ import javax.ws.rs.core.Response;
 import org.apache.commons.codec.DecoderException;
 import org.apache.commons.codec.binary.Base64;
 import org.apache.commons.codec.binary.Hex;
+import org.apache.commons.io.IOUtils;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -112,7 +113,7 @@ public class Shard {
         
         // determine algorithm used to generate identifiers for objects added to chord ring
         String identifierAlgoName = chordConfig.getIdentifier().toLowerCase();
-        if (identifierAlgoName.equals(IdentifierAlgorithm.SHA256.toString().toLowerCase())) {
+        if (identifierAlgoName.equals(IdentifierAlgorithm.SHA256_NOVERIFY.toString().toLowerCase())) {
             identifierAlgo = IdentifierAlgorithm.SHA256_NOVERIFY;
         } else if (identifierAlgoName.equals(IdentifierAlgorithm.SHA256.toString().toLowerCase())) {
             identifierAlgo = IdentifierAlgorithm.SHA256;
@@ -243,14 +244,16 @@ public class Shard {
             InputStream downloadInputStream = Files.newInputStream(filePath);
             // by default, just copy directly from file for IdentifierAlgorithm.SHA256_NOVERIFY
             InputStream wrappedInputStream = downloadInputStream;
-            
-            if (identifierAlgo.equals(IdentifierAlgorithm.HMAC_SHA256)) {
+            if (identifierAlgo.equals(IdentifierAlgorithm.SHA256_NOVERIFY)) {
+                return Response.ok().entity(downloadInputStream).build();
+            } else if (identifierAlgo.equals(IdentifierAlgorithm.HMAC_SHA256)) {
                 wrappedInputStream = new HMACInputStream(downloadInputStream, secretKey);
             } else if (identifierAlgo.equals(IdentifierAlgorithm.SHA256)) {
                 wrappedInputStream = new DigestInputStream(downloadInputStream, sha256);
             }
             
-            Response resp = Response.ok().entity(wrappedInputStream).build();
+            // consume inputStream so that checksum computation completes
+            byte[] bytes = IOUtils.toByteArray(wrappedInputStream); 
             
             if (identifierAlgo.equals(IdentifierAlgorithm.HMAC_SHA256)){
                 digest = ((HMACInputStream) wrappedInputStream).getDigest();     
@@ -263,8 +266,9 @@ public class Shard {
                 return Response.status(Response.Status.GONE).
                     type(MediaType.APPLICATION_JSON_TYPE).
                     entity(results).build();
+            } else {
+                return Response.ok().entity(bytes).build();
             }
-            return resp;
         } else {
             return Responses.notFound().build();
         }
