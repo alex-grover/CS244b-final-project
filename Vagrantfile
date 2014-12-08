@@ -22,6 +22,9 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
       #s.vm.hostname = "cs244b-#{i}"
       #s.vm.network "public_network", use_dhcp_assigned_default_route: true
       s.vm.network "private_network", ip: "192.168.50.#{i}", netmask: "255.255.255.0", virtualbox__intnet: "cs244b", drop_nat_interface_default_route: true
+      s.vm.network "forwarded_port", host: 8078+2*i, guest: 8078+2*i # webserver
+      s.vm.network "forwarded_port", host: 8079+2*i, guest: 8079+2*i # RMI
+      s.vm.network "forwarded_port", host: 10000+i, guest: 10000+i #JDWP for debugging
       s.vm.provision "shell", path: "scripts/install.sh", args:"#{i}", privileged: "true"
     end
   end
