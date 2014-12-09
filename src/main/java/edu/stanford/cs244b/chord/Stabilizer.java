@@ -4,7 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class Stabilizer extends Thread {
-	final static int SLEEP_MILLIS = 1000;
+	final static int SLEEP_MILLIS = 5000;
 	
 	final static Logger logger = LoggerFactory.getLogger(Stabilizer.class);
 	

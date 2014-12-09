@@ -132,14 +132,13 @@ public class Shard {
         try {
             // initialize Chord node and join ring
             // note that RMI port is 1 higher than webserver port.
-            node = new ChordNode(myIP, myPort+1);
+            node = new ChordNode(myIP, myPort+1, this);
             Finger locationToJoin = new Finger(hostToJoin, portToJoin+1);
             if ((hostToJoin.isLoopbackAddress() || hostToJoin.equals(myIP)) && portToJoin==myPort) {            
                 node.join(locationToJoin, true);
             } else {
                 node.join(locationToJoin, false);
             }
-            
         } catch (Exception e) {
             e.printStackTrace();
             System.exit(1);
@@ -185,7 +184,7 @@ public class Shard {
      * @throws IOException 
      * @throws InvalidKeyException 
      * @throws NoSuchProviderException */ 
-    private String saveFile(InputStream uploadInputStream)
+    public String saveFile(InputStream uploadInputStream)
             throws NoSuchAlgorithmException, IOException, InvalidKeyException, NoSuchProviderException {
         byte[] digest;
         InputStream wrappedInputStream;
@@ -196,11 +195,7 @@ public class Shard {
             // assume SHA256 or SHA256_NOVERIFY
             wrappedInputStream = new DigestInputStream(uploadInputStream, sha256);
         }
-        // write file to temporary location
-        java.nio.file.Path tempPath = Paths.get(TEMP_DIR, UUID.randomUUID().toString());
-        Files.copy(wrappedInputStream, tempPath);
         
-
         if (identifierAlgo.equals(IdentifierAlgorithm.HMAC_SHA256)){
             digest = ((HMACInputStream) wrappedInputStream).getDigest();
         } else {
@@ -209,12 +204,19 @@ public class Shard {
         }
         
         String hexadecimalHash = Hex.encodeHexString(digest);
-        java.nio.file.Path outputPath = Paths.get(DATA_DIR, hexadecimalHash);
         
         // TODO: verify that hash is correct, distribute to other replicas...
         
-        // perform atomic rename on success
-        Files.move(tempPath, outputPath, StandardCopyOption.ATOMIC_MOVE);
+        int identifier = Util.hexStringToIdentifier(hexadecimalHash);
+        if (node.ownsIdentifier(identifier)) {
+        	// save file to disk
+        	java.nio.file.Path outputPath = Paths.get(DATA_DIR, hexadecimalHash);
+        	Files.copy(wrappedInputStream, outputPath);
+        } else {
+        	// forward request to appropriate node
+        	node.forwardSave(identifier, uploadInputStream);
+        }
+        
         return hexadecimalHash;
     }
     
@@ -266,7 +268,13 @@ public class Shard {
             }
             return resp;
         } else {
-            return Responses.notFound().build();
+    		int identifier = Util.hexStringToIdentifier(idString);
+    		if (!node.ownsIdentifier(identifier)) {
+    			Response res = node.forwardLookup(identifier, idString);
+    			return res != null ? res : Responses.notFound().build();
+    		} else {
+    			return Responses.notFound().build();
+    		}
         }
     }
     

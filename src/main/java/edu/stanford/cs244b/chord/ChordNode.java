@@ -24,6 +24,8 @@ import edu.stanford.cs244b.Util;
 public class ChordNode extends UnicastRemoteObject implements RemoteChordNodeI {
     Registry registry;
     
+    final Shard shard;
+    
     //final static int NUM_FINGERS = 32;
     final static int NUM_FINGERS = 1;
     final static Logger logger = LoggerFactory.getLogger(ChordNode.class);
@@ -42,8 +44,11 @@ public class ChordNode extends UnicastRemoteObject implements RemoteChordNodeI {
     
     protected Stabilizer stabilizer;
         
-    public ChordNode(InetAddress host, int port) throws RemoteException {
+    public ChordNode(InetAddress host, int port, Shard shard) throws RemoteException {
         super();
+        
+        this.shard = shard;
+        
         this.location = new Finger(host, port);
         fingerTable = new Finger[NUM_FINGERS];
         for (int index=0; index < NUM_FINGERS; index++) {
@@ -249,19 +254,49 @@ public class ChordNode extends UnicastRemoteObject implements RemoteChordNodeI {
     public String toString() {
         return location.toString();
     }
+    
+    public boolean ownsIdentifier(int identifier) {
+    	return Util.withinInterval(identifier, this.getShardId(), this.getSuccessor().shardid);
+    }
 
-    /** Remote method to accept POST request from another server in Chord ring
+    /** Forward POST request to appropriate node */
+	public void forwardSave(int identifier, final InputStream uploadInputStream) {
+		try {
+			RemoteChordNodeI node = getChordNode(findPredecessor(identifier).getLocation());
+			node.saveFile(uploadInputStream);
+		} catch (RemoteException e) {
+			logger.error("Error forwarding save request", e);
+		}
+	}
+	
+	/** Receive forwarded request */
 	@Override
-	public String forwardRequest(final InputStream uploadInputStream) throws RemoteException {
-		// TODO: Call shard.insertItem with the data given
-		return "";
-	}*/
+	public void saveFile(final InputStream uploadInputStream) {
+		try {
+			this.shard.saveFile(uploadInputStream);
+		} catch (Exception e) {
+			logger.error("Error saving file", e);
+		}
+	}
+	
+	public Response forwardLookup(int identifier, String hash) {
+		try {
+			RemoteChordNodeI node = getChordNode(findPredecessor(identifier).getLocation());
+			return node.getFile(hash);
+		} catch (RemoteException e) {
+			logger.error("Error looking up file on remote node", e);
+			return null;
+		}
+	}
 
-	/** Remote method to return item if contained on this server 
+	/** Remote method to return item if contained on this server */
 	@Override
-	public Response getRemoteItem(String identifier) throws RemoteException {
-		// TODO: Return object from shard if exists or forward GET
-		// to next node in the finger table
-		return null;
-	}*/
+	public Response getFile(String hash) {
+		try {
+			return this.shard.getItem(hash);
+		} catch (Exception e) {
+			logger.error("Error getting file", e);
+			return null;
+		}
+	}
 }

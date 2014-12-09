@@ -1,8 +1,11 @@
 package edu.stanford.cs244b.chord;
 
+import java.io.InputStream;
 import java.net.InetAddress;
 import java.rmi.Remote;
 import java.rmi.RemoteException;
+
+import javax.ws.rs.core.Response;
 
 public interface RemoteChordNodeI extends Remote {
 
@@ -40,4 +43,10 @@ public interface RemoteChordNodeI extends Remote {
     
     /** Remove node from finger table */
     public abstract void removeNode(ChordNode node, int index, Finger replacement) throws RemoteException;
+    
+    /** Receive forwarded save request from another node */
+    public void saveFile(InputStream uploadInputStream) throws RemoteException;
+    
+    /** Look up file located on this server */
+    public Response getFile(String hash) throws RemoteException;
 }

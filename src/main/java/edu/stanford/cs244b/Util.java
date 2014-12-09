@@ -50,4 +50,8 @@ public class Util {
         // convert back to signed integer
         return (int) (unsignedHashValue+Integer.MIN_VALUE);
     }
+    
+    public static int hexStringToIdentifier(String hash) {
+    	return Integer.parseInt(hash.substring(0, 8), 16);
+    }
 }
