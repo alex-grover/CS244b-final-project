@@ -23,8 +23,8 @@ public class ChordNode extends UnicastRemoteObject implements RemoteChordNodeI {
     
     final Shard shard;
     
-//    final static int NUM_FINGERS = 32;
-    final static int NUM_FINGERS = 1;
+    final static int NUM_FINGERS = 32;
+//    final static int NUM_FINGERS = 1;
     final static Logger logger = LoggerFactory.getLogger(ChordNode.class);
     
     /** Location of this ChordNode, includes host ip, port, and shardid */
@@ -161,8 +161,10 @@ public class ChordNode extends UnicastRemoteObject implements RemoteChordNodeI {
     public void fixFingers() {
     	try {
 	    	Random rgen = new Random();
-	    	int i = rgen.nextInt(NUM_FINGERS);
-	    	fingerTable[i] = findSuccessor(fingerTable[i].shardid).getLocation();
+	    	int i = rgen.nextInt(NUM_FINGERS - 1) + 1;
+	    	Finger f = findSuccessor(fingerTable[i].shardid).getLocation();
+	    	logger.info("Updating fingerTable[" + i + "] from "+ fingerTable[i] + " to " + f);
+	    	fingerTable[i] = f;
     	} catch (RemoteException e) {
     		logger.error("Failed to update finger table", e);
     	}
