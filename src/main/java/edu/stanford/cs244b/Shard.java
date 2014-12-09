@@ -189,6 +189,10 @@ public class Shard {
             wrappedInputStream = new DigestInputStream(uploadInputStream, sha256);
         }
         
+        // write file to temporary location
+        java.nio.file.Path tempPath = Paths.get(TEMP_DIR, UUID.randomUUID().toString());
+        Files.copy(wrappedInputStream, tempPath);
+        
         if (identifierAlgo.equals(IdentifierAlgorithm.HMAC_SHA256)){
             digest = ((HMACInputStream) wrappedInputStream).getDigest();
         } else {
@@ -204,8 +208,6 @@ public class Shard {
         if (node.ownsIdentifier(identifier)) {
         	logger.info("Saving file to disk");
         	// save file to disk
-            java.nio.file.Path tempPath = Paths.get(TEMP_DIR, UUID.randomUUID().toString());
-            Files.copy(wrappedInputStream, tempPath);
         	java.nio.file.Path outputPath = Paths.get(DATA_DIR, hexadecimalHash);
         	Files.move(tempPath, outputPath, StandardCopyOption.ATOMIC_MOVE);
         } else {
@@ -213,6 +215,7 @@ public class Shard {
         	// forward request to appropriate node
         	String serializedFile = Util.streamToString(uploadInputStream);
         	node.forwardSave(identifier, serializedFile);
+        	Files.delete(tempPath);
         }
         
         return hexadecimalHash;
@@ -266,7 +269,7 @@ public class Shard {
         return null;
     }
     
-    public Response processFile(InputStream downloadInputStream, String idString) throws InvalidKeyException, NoSuchAlgorithmException, NoSuchProviderException {
+    public Response processFile(InputStream downloadInputStream, String idString) throws InvalidKeyException, NoSuchAlgorithmException, NoSuchProviderException, IOException {
     	byte[] digest = null;
     	Map<String, Object> results = recordRequest();
     	MessageDigest sha256 = MessageDigest.getInstance("SHA-256");
