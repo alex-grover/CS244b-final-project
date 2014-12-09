@@ -3,15 +3,11 @@ package edu.stanford.cs244b.chord;
 import java.io.InputStream;
 import java.net.InetAddress;
 import java.rmi.Naming;
-import java.rmi.NotBoundException;
-import java.rmi.Remote;
 import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
 import java.util.Random;
-
-import javax.ws.rs.core.Response;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,11 +17,14 @@ import edu.stanford.cs244b.Util;
 
 /** Core components of the Chord distributed hash table implementation.
  *  Keeps track of other shards in the ring to ensure O(log n) lookup */
+@SuppressWarnings("serial")
 public class ChordNode extends UnicastRemoteObject implements RemoteChordNodeI {
     Registry registry;
     
-    //final static int NUM_FINGERS = 32;
-    final static int NUM_FINGERS = 1;
+    final Shard shard;
+    
+    final static int NUM_FINGERS = 32;
+//    final static int NUM_FINGERS = 1;
     final static Logger logger = LoggerFactory.getLogger(ChordNode.class);
     
     /** Location of this ChordNode, includes host ip, port, and shardid */
@@ -42,8 +41,11 @@ public class ChordNode extends UnicastRemoteObject implements RemoteChordNodeI {
     
     protected Stabilizer stabilizer;
         
-    public ChordNode(InetAddress host, int port) throws RemoteException {
+    public ChordNode(InetAddress host, int port, Shard shard) throws RemoteException {
         super();
+        
+        this.shard = shard;
+        
         this.location = new Finger(host, port);
         fingerTable = new Finger[NUM_FINGERS];
         for (int index=0; index < NUM_FINGERS; index++) {
@@ -72,9 +74,9 @@ public class ChordNode extends UnicastRemoteObject implements RemoteChordNodeI {
         try {
             // OMG, figuring this out was painful...
             // http://euclid.nmu.edu/~rappleto/Classes/RMI/rmi-coding.html
-            String rmiURL = location.getRMIUrl();
+            String rmiURL = remoteLocation.getRMIUrl();
             RemoteChordNodeI chordNode = (RemoteChordNodeI) Naming.lookup(rmiURL);
-            Finger nodeLocation = chordNode.getLocation(); // verify that we can contact ChordNode at specified location
+            // Finger nodeLocation = chordNode.getLocation(); // verify that we can contact ChordNode at specified location (necessary?)
             return chordNode;
         } catch (Exception e) {
             logger.error("Failed to get remote ChordNode at location "+remoteLocation, e);
@@ -136,7 +138,8 @@ public class ChordNode extends UnicastRemoteObject implements RemoteChordNodeI {
     public void stabilize() {
     	try {
     		Finger x = getChordNode(getSuccessor()).getPredecessor();
-    		if (x != null && (x.host == location.host || x.host == getSuccessor().host)) {
+    		if (x != null && Util.withinInterval(x.shardid, getShardId() + 1, getSuccessor().shardid)) {
+    			logger.info("Updating successor from "+Integer.toHexString(getSuccessor().shardid)+" to "+Integer.toHexString(x.shardid));
     			fingerTable[0] = x;
     		}
     		getChordNode(getSuccessor()).notifyPredecessor(location);
@@ -148,10 +151,9 @@ public class ChordNode extends UnicastRemoteObject implements RemoteChordNodeI {
     /** Notify node of request to become predecessor */
     @Override
     public void notifyPredecessor(Finger newPredecessor) {
-    	if (predecessor == null ||
-    		predecessor.host == newPredecessor.host ||
-    		predecessor.host == location.host) {
-    			predecessor = newPredecessor;
+    	if (predecessor == null || Util.withinInterval(newPredecessor.shardid, predecessor.shardid + 1, getShardId())) {
+    		logger.info("Updating predecessor to "+Integer.toHexString(newPredecessor.shardid));
+    		predecessor = newPredecessor;
     	}
     }
     
@@ -159,8 +161,10 @@ public class ChordNode extends UnicastRemoteObject implements RemoteChordNodeI {
     public void fixFingers() {
     	try {
 	    	Random rgen = new Random();
-	    	int i = rgen.nextInt(NUM_FINGERS);
-	    	fingerTable[i] = findSuccessor(fingerTable[i].shardid).getLocation();
+	    	int i = rgen.nextInt(NUM_FINGERS - 1) + 1;
+	    	Finger f = findSuccessor(fingerTable[i].shardid).getLocation();
+	    	logger.info("Updating fingerTable[" + i + "] from "+ fingerTable[i] + " to " + f);
+	    	fingerTable[i] = f;
     	} catch (RemoteException e) {
     		logger.error("Failed to update finger table", e);
     	}
@@ -175,10 +179,10 @@ public class ChordNode extends UnicastRemoteObject implements RemoteChordNodeI {
     @Override
     public RemoteChordNodeI findPredecessor(int identifier) throws RemoteException {
         RemoteChordNodeI next = this;
-        logger.info("FindPredecessor for id="+Integer.toHexString(identifier)+" next_shardid="+Integer.toHexString(next.getShardId()));
-        while (!Util.withinInterval(identifier, next.getShardId()+1, next.getSuccessor().shardid+1)) {
+//        logger.info("FindPredecessor for id="+Integer.toHexString(identifier)+" next_shardid="+Integer.toHexString(next.getShardId()));
+        while (!Util.withinInterval(identifier, next.getShardId() + 1, next.getSuccessor().shardid + 1)) {
             next = next.closestPrecedingFinger(identifier);
-            logger.info("FindPredecessor for id="+Integer.toHexString(identifier)+" next_shardid="+Integer.toHexString(next.getShardId()));
+//            logger.info("FindPredecessor for id="+Integer.toHexString(identifier)+" next_shardid="+Integer.toHexString(next.getShardId()));
         }
         return next;
         
@@ -190,7 +194,7 @@ public class ChordNode extends UnicastRemoteObject implements RemoteChordNodeI {
         // lookup in finger tree 
         for (int index = NUM_FINGERS-1; index >= 0; index--) {
             try {
-                if (Util.withinInterval(fingerTable[index].shardid, location.shardid+1, identifier)) {
+                if (Util.withinInterval(fingerTable[index].shardid, location.shardid + 1, identifier)) {
                     return getChordNode(fingerTable[index]);
                 }
             } catch (RemoteException e) {
@@ -249,19 +253,58 @@ public class ChordNode extends UnicastRemoteObject implements RemoteChordNodeI {
     public String toString() {
         return location.toString();
     }
+    
+    public boolean ownsIdentifier(int identifier) {
+    	return Util.withinInterval(identifier, this.getShardId(), this.getSuccessor().shardid);
+    }
 
-    /** Remote method to accept POST request from another server in Chord ring
+    /** Forward POST request to appropriate node */
+	public void forwardSave(int identifier, String inputString) {
+		try {
+			RemoteChordNodeI node = getChordNode(findPredecessor(identifier).getLocation());
+			node.saveFile(inputString);
+		} catch (RemoteException e) {
+			logger.error("Error forwarding save request", e);
+		}
+	}
+	
+	/** Receive forwarded request */
 	@Override
-	public String forwardRequest(final InputStream uploadInputStream) throws RemoteException {
-		// TODO: Call shard.insertItem with the data given
-		return "";
-	}*/
+	public void saveFile(String inputString) {
+		logger.info("Saving forwarded file");
+		InputStream uploadInputStream = Util.stringToStream(inputString);
+		
+		try {
+			this.shard.saveFile(uploadInputStream);
+		} catch (Exception e) {
+			logger.error("Error saving file", e);
+		}
+	}
+	
+	public String forwardLookup(int identifier, String hash) {
+		try {
+			RemoteChordNodeI node = getChordNode(findPredecessor(identifier).getLocation());
+			return node.getFile(hash);
+		} catch (RemoteException e) {
+			logger.error("Error looking up file on remote node", e);
+			return null;
+		}
+	}
 
-	/** Remote method to return item if contained on this server 
+	/** Remote method to return item if contained on this server */
 	@Override
-	public Response getRemoteItem(String identifier) throws RemoteException {
-		// TODO: Return object from shard if exists or forward GET
-		// to next node in the finger table
-		return null;
-	}*/
+	public String getFile(String hash) {
+		logger.info("Looking up object for remote server");
+		try {
+			return this.shard.getItemAsString(hash);
+		} catch (Exception e) {
+			logger.error("Error getting file", e);
+			return null;
+		}
+	}
+	
+	/** Indicates whether successor pointers are correct */
+	public boolean stable() {
+		return getSuccessor().shardid != location.shardid;
+	}
 }

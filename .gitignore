@@ -7,3 +7,4 @@ key*.txt
 target
 temp*
 .vagrant
+env

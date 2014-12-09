@@ -1,5 +1,11 @@
 package edu.stanford.cs244b;
 
+import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+
 /** Collection of various useful utility methods */
 public class Util {    
     /** Take 32 most-significant bits of IP address
@@ -49,5 +55,24 @@ public class Util {
         long unsignedHashValue = ((unsignedValue*2654435761l) % unsignedIntMax);
         // convert back to signed integer
         return (int) (unsignedHashValue+Integer.MIN_VALUE);
+    }
+    
+    public static int hexStringToIdentifier(String hash) {
+    	return Integer.parseInt(hash.substring(0, 4), 16);
+    }
+    
+    public static String streamToString(InputStream stream) throws IOException {
+    	StringBuilder inputStringBuilder = new StringBuilder();
+        BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(stream, "UTF-8"));
+        String line = bufferedReader.readLine();
+        while (line != null) {
+            inputStringBuilder.append(line);inputStringBuilder.append('\n');
+            line = bufferedReader.readLine();
+        }
+        return inputStringBuilder.toString();
+    }
+    
+    public static InputStream stringToStream(String inputString) {
+    	return new ByteArrayInputStream(inputString.getBytes());
     }
 }
