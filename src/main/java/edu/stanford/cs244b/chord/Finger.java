@@ -5,6 +5,7 @@ import java.net.InetAddress;
 
 import edu.stanford.cs244b.Shard;
 
+@SuppressWarnings("serial")
 public class Finger implements Serializable {
     public InetAddress host;
     public int port;

@@ -1,11 +1,8 @@
 package edu.stanford.cs244b.chord;
 
-import java.io.InputStream;
 import java.net.InetAddress;
 import java.rmi.Remote;
 import java.rmi.RemoteException;
-
-import javax.ws.rs.core.Response;
 
 public interface RemoteChordNodeI extends Remote {
 

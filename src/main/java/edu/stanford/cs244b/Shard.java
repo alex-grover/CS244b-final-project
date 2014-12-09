@@ -14,7 +14,6 @@ import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
 import org.apache.commons.codec.DecoderException;
-import org.apache.commons.codec.binary.Base64;
 import org.apache.commons.codec.binary.Hex;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.slf4j.Logger;
@@ -22,8 +21,6 @@ import org.slf4j.LoggerFactory;
 
 import com.codahale.metrics.annotation.Timed;
 import com.sun.jersey.api.Responses;
-import com.sun.jersey.core.header.FormDataContentDisposition;
-import com.sun.jersey.multipart.FormDataBodyPart;
 import com.sun.jersey.multipart.FormDataParam;
 import com.wordnik.swagger.annotations.Api;
 import com.wordnik.swagger.annotations.ApiOperation;
@@ -32,28 +29,21 @@ import edu.stanford.cs244b.ChordConfiguration.Chord;
 import edu.stanford.cs244b.crypto.HMACInputStream;
 import edu.stanford.cs244b.chord.ChordNode;
 import edu.stanford.cs244b.chord.Finger;
-import edu.stanford.cs244b.chord.RemoteChordNodeI;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
-import java.rmi.registry.LocateRegistry;
-import java.rmi.registry.Registry;
-import java.rmi.server.UnicastRemoteObject;
 import java.security.DigestInputStream;
 import java.security.InvalidKeyException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.NoSuchProviderException;
-import java.security.SecureRandom;
 import java.security.Security;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -134,7 +124,7 @@ public class Shard {
             // note that RMI port is 1 higher than webserver port.
             node = new ChordNode(myIP, myPort+1, this);
             Finger locationToJoin = new Finger(hostToJoin, portToJoin+1);
-            if ((hostToJoin.isLoopbackAddress() || hostToJoin.equals(myIP)) && portToJoin==myPort) {            
+            if ((hostToJoin.isLoopbackAddress() || hostToJoin.equals(myIP)) && portToJoin==myPort) {
                 node.join(locationToJoin, true);
             } else {
                 node.join(locationToJoin, false);
@@ -151,7 +141,8 @@ public class Shard {
      *  eg: populate hashmap containing shardId, record a hit to the shard
      *  (maybe for load-balancing purposes) 
      */
-    private HashMap<String,Object> recordRequest() {
+    @SuppressWarnings("serial")
+	private HashMap<String,Object> recordRequest() {
         return new HashMap<String,Object>() {{
             put("shard", shardIdAsHex());
             put("hits", counter.incrementAndGet());
@@ -163,7 +154,8 @@ public class Shard {
      * @throws NoSuchAlgorithmException 
      * @throws InvalidKeyException 
      * @throws NoSuchProviderException */
-    @POST
+    @SuppressWarnings("serial")
+	@POST
     @Timed
     @Consumes(MediaType.MULTIPART_FORM_DATA)
     @Produces(MediaType.APPLICATION_JSON)

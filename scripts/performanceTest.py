@@ -5,12 +5,13 @@ import json
 
 # Simple python script to repeatedly upload the specified file as multipart form post
 
-NUM_TRIALS=1000
+NUM_TRIALS=100
 
 url = 'http://localhost:8080/shard'
 #files = {'file': open('testdata/configuration.yml', 'rb')}
 #files = {'file': open('testdata/icon.png', 'rb')}
-files = {'file': open('testdata/paper.pdf', 'rb')}
+#files = {'file': open('testdata/paper.pdf', 'rb')}
+files = {'file': open('testdata/Chord.pdf', 'rb')}
 #files = {'file': open('testdata/photo.jpg', 'rb')}
 #files = {'file': open('testdata/executable.jar', 'rb')}
 

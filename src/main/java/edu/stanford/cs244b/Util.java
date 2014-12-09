@@ -1,5 +1,11 @@
 package edu.stanford.cs244b;
 
+import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+
 /** Collection of various useful utility methods */
 public class Util {    
     /** Take 32 most-significant bits of IP address
