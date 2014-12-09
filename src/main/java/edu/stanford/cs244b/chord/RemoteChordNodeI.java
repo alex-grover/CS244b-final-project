@@ -42,8 +42,8 @@ public interface RemoteChordNodeI extends Remote {
     public abstract void removeNode(ChordNode node, int index, Finger replacement) throws RemoteException;
     
     /** Receive forwarded save request from another node */
-    public void saveFile(InputStream uploadInputStream) throws RemoteException;
+    public void saveFile(String inputString) throws RemoteException;
     
     /** Look up file located on this server */
-    public Response getFile(String hash) throws RemoteException;
+    public String getFile(String hash) throws RemoteException;
 }

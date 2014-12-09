@@ -19,7 +19,7 @@ public class Stabilizer extends Thread {
 		try {
 			while (!Thread.currentThread().isInterrupted()) {
 				node.stabilize();
-				node.fixFingers();
+				if (node.stable()) node.fixFingers();
 				Thread.sleep(SLEEP_MILLIS);
 			}
 		} catch (InterruptedException e) {

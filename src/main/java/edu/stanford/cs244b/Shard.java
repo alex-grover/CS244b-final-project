@@ -201,12 +201,17 @@ public class Shard {
         
         int identifier = Util.hexStringToIdentifier(hexadecimalHash);
         if (node.ownsIdentifier(identifier)) {
+        	logger.info("Saving file to disk");
         	// save file to disk
+            java.nio.file.Path tempPath = Paths.get(TEMP_DIR, UUID.randomUUID().toString());
+            Files.copy(wrappedInputStream, tempPath);
         	java.nio.file.Path outputPath = Paths.get(DATA_DIR, hexadecimalHash);
-        	Files.copy(wrappedInputStream, outputPath);
+        	Files.move(tempPath, outputPath, StandardCopyOption.ATOMIC_MOVE);
         } else {
+        	logger.info("posting file to remote server");
         	// forward request to appropriate node
-        	node.forwardSave(identifier, uploadInputStream);
+        	String serializedFile = Util.streamToString(uploadInputStream);
+        	node.forwardSave(identifier, serializedFile);
         }
         
         return hexadecimalHash;
@@ -227,47 +232,67 @@ public class Shard {
     @Path("/{itemId}")
     @ApiOperation("Retrieve an item from this shard, or return 404 Not Found if it does not exist")
     public Response getItem(@PathParam("itemId") String idString) throws DecoderException, IOException, NoSuchAlgorithmException, InvalidKeyException, NoSuchProviderException {
-        //byte[] id = Hex.decodeHex(idString.toCharArray());
-        Map<String, Object> results = recordRequest();
-        // TODO: check that file is owned by this node, otherwise forward to next node per fingertable
-        MessageDigest sha256 = MessageDigest.getInstance("SHA-256");
         java.nio.file.Path filePath = Paths.get(DATA_DIR, idString);
         if (Files.exists(filePath)) {
-            byte[] digest = null;
+        	logger.info("File exists, fetching from local server");
             InputStream downloadInputStream = Files.newInputStream(filePath);
-            // by default, just copy directly from file for IdentifierAlgorithm.SHA256_NOVERIFY
-            InputStream wrappedInputStream = downloadInputStream;
-            
-            if (identifierAlgo.equals(IdentifierAlgorithm.HMAC_SHA256)) {
-                wrappedInputStream = new HMACInputStream(downloadInputStream, secretKey);
-            } else if (identifierAlgo.equals(IdentifierAlgorithm.SHA256)) {
-                wrappedInputStream = new DigestInputStream(downloadInputStream, sha256);
-            }
-            
-            Response resp = Response.ok().entity(wrappedInputStream).build();
-            
-            if (identifierAlgo.equals(IdentifierAlgorithm.HMAC_SHA256)){
-                digest = ((HMACInputStream) wrappedInputStream).getDigest();     
-            } else if (identifierAlgo.equals(IdentifierAlgorithm.SHA256)) {
-                digest = sha256.digest();
-            }
-            
-            if (digest != null && !idString.equalsIgnoreCase(Hex.encodeHexString(digest))) {
-                results.put("error", "request for "+idString+" does not match computed checksum "+Hex.encodeHexString(digest));
-                return Response.status(Response.Status.GONE).
-                    type(MediaType.APPLICATION_JSON_TYPE).
-                    entity(results).build();
-            }
-            return resp;
+            return processFile(downloadInputStream, idString);
         } else {
     		int identifier = Util.hexStringToIdentifier(idString);
     		if (!node.ownsIdentifier(identifier)) {
-    			Response res = node.forwardLookup(identifier, idString);
-    			return res != null ? res : Responses.notFound().build();
+    			logger.info("File doesn't exist, forwarding request");
+    			String res = node.forwardLookup(identifier, idString);
+    			
+    			if (res == null) {
+    				return Responses.notFound().build();
+    			}
+    			
+    			InputStream downloadInputStream = Util.stringToStream(res);
+    			return processFile(downloadInputStream, idString);
     		} else {
     			return Responses.notFound().build();
     		}
         }
+    }
+    
+    public String getItemAsString(String idString) throws DecoderException, IOException, NoSuchAlgorithmException, InvalidKeyException, NoSuchProviderException {
+        java.nio.file.Path filePath = Paths.get(DATA_DIR, idString);
+        if (Files.exists(filePath)) {
+        	logger.info("Getting file for remote server as string");
+            InputStream downloadInputStream = Files.newInputStream(filePath);
+            return Util.streamToString(downloadInputStream);
+        } 
+        return null;
+    }
+    
+    public Response processFile(InputStream downloadInputStream, String idString) throws InvalidKeyException, NoSuchAlgorithmException, NoSuchProviderException {
+    	byte[] digest = null;
+    	Map<String, Object> results = recordRequest();
+    	MessageDigest sha256 = MessageDigest.getInstance("SHA-256");
+    	// by default, just copy directly from file for IdentifierAlgorithm.SHA256_NOVERIFY
+        InputStream wrappedInputStream = downloadInputStream;
+        
+        if (identifierAlgo.equals(IdentifierAlgorithm.HMAC_SHA256)) {
+            wrappedInputStream = new HMACInputStream(downloadInputStream, secretKey);
+        } else if (identifierAlgo.equals(IdentifierAlgorithm.SHA256)) {
+            wrappedInputStream = new DigestInputStream(downloadInputStream, sha256);
+        }
+        
+        Response resp = Response.ok().entity(wrappedInputStream).build();
+        
+        if (identifierAlgo.equals(IdentifierAlgorithm.HMAC_SHA256)){
+            digest = ((HMACInputStream) wrappedInputStream).getDigest();     
+        } else if (identifierAlgo.equals(IdentifierAlgorithm.SHA256)) {
+            digest = sha256.digest();
+        }
+        
+        if (digest != null && !idString.equalsIgnoreCase(Hex.encodeHexString(digest))) {
+            results.put("error", "request for "+idString+" does not match computed checksum "+Hex.encodeHexString(digest));
+            return Response.status(Response.Status.GONE).
+                type(MediaType.APPLICATION_JSON_TYPE).
+                entity(results).build();
+        }
+        return resp;
     }
     
     public SecretKeySpec readOrCreateSecretKey() throws NoSuchAlgorithmException {
