@@ -41,17 +41,14 @@ public interface RemoteChordNodeI extends Remote {
     /** Remove node from finger table */
     public abstract void removeNode(ChordNode node, int index, Finger replacement) throws RemoteException;
     
-    /** Receive forwarded save request from another node */
-    public void saveFile(byte[] serialized) throws RemoteException;
-    
     /** Look up file located on this server */
     public byte[] getFile(String hash) throws RemoteException;
     
     /** Return finger table */
     public Finger[] getFingerTable() throws RemoteException;
     
-    /** Save file stored on previous server */
-    public void saveReplicatedFile(byte[] input, int nodesLeft) throws RemoteException;
+    /** Save replica of file received from previous server */
+    public void replicateFile(byte[] data, int nodesLeft) throws RemoteException;
     
     public void refreshSuccessors(int nodesLeft) throws RemoteException;
 }
