@@ -124,6 +124,11 @@ public class Shard {
             // initialize Chord node and join ring
             // note that RMI port is 1 higher than webserver port.
             node = new ChordNode(myIP, myPort+1, this);
+            
+            // wait 20 seconds so we can attach debugger
+            logger.info("Attach debugger now");
+            Thread.sleep(20000l);
+            
             Finger locationToJoin = new Finger(hostToJoin, portToJoin+1);
             if ((hostToJoin.isLoopbackAddress() || hostToJoin.equals(myIP)) && portToJoin==myPort) {
                 node.join(locationToJoin, true);

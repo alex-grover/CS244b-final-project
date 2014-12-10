@@ -123,6 +123,7 @@ public class ChordNode extends UnicastRemoteObject implements RemoteChordNodeI {
      *  Returns true if join succeeded, false otherwise
      */
     public boolean join(Finger existingLocation, boolean isFirstNode) {
+        logger.info("Joining node "+existingLocation+"; isFirstNode="+isFirstNode);
     	try {
     		predecessor = null;
     		fingerTable[0] = getChordNode(existingLocation).findSuccessor(getShardId()).getLocation();
