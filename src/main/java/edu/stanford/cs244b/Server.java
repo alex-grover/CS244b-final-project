@@ -36,7 +36,7 @@ public class Server extends Application<ChordConfiguration> {
     @Override
     public void run(ChordConfiguration configuration,
                     Environment environment) throws UnknownHostException, NoSuchAlgorithmException {
-        environment.jersey().setUrlPattern("/shard/*");
+        environment.jersey().setUrlPattern("/api/*");
         
         // TODO: ensure each shard is uniquely identified/numbered...
         
