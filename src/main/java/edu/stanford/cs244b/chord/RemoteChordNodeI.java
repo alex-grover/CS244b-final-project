@@ -52,4 +52,6 @@ public interface RemoteChordNodeI extends Remote {
     
     /** Save file stored on previous server */
     public void saveReplicatedFile(String inputString, int nodesLeft) throws RemoteException;
+    
+    public void refreshSuccessors(int nodesLeft) throws RemoteException;
 }

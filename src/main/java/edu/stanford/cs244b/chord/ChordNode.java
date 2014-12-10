@@ -45,6 +45,9 @@ public class ChordNode implements RemoteChordNodeI {
      *  addition to the origin node. */
     final static int REPLICATION_FACTOR = 1;
     
+    /** List of successors to check in case of failure */
+    protected Finger[] successorList = new Finger[REPLICATION_FACTOR];
+    
     protected Stabilizer stabilizer;
         
     public ChordNode(InetAddress host, int port, Shard shard) throws RemoteException {
@@ -56,6 +59,10 @@ public class ChordNode implements RemoteChordNodeI {
         fingerTable = new Finger[NUM_FINGERS];
         for (int index=0; index < NUM_FINGERS; index++) {
             fingerTable[index] = location;
+        }
+        
+        for (int i = 0; i < REPLICATION_FACTOR; i++) {
+        	successorList[i] = null;
         }
         
         // insane hack to get RMI working in virtualbox
@@ -180,6 +187,8 @@ public class ChordNode implements RemoteChordNodeI {
     			}
     		}
     		
+    		refreshSuccessors(0);
+    		
     		stabilizer = new Stabilizer();
     		stabilizer.start();
     		return true;
@@ -197,9 +206,10 @@ public class ChordNode implements RemoteChordNodeI {
                     Util.withinInterval(x.shardid, location.shardid+1, getSuccessor().shardid-1)) {
     			logger.info("Updating successor from "+Integer.toHexString(getSuccessor().shardid)+" to "+Integer.toHexString(x.shardid));
     		    fingerTable[0] = x;
+    		    getChordNode(predecessor).refreshSuccessors(REPLICATION_FACTOR - 1);
     		}
-    		RemoteChordNodeI remote = getChordNode(getSuccessor());
-    		remote.notifyPredecessor(location);
+    		RemoteChordNodeI successor = getChordNode(getSuccessor());
+    		successor.notifyPredecessor(location);
     	} catch (RemoteException e) {
     		logger.error("Failed to update and notify successor", e);
     	}
@@ -339,6 +349,7 @@ public class ChordNode implements RemoteChordNodeI {
 		}
 	}
 	
+	/** Look up file on remote node */
 	public String forwardLookup(int identifier, String hash) {
 		try {
 			RemoteChordNodeI node = getChordNode(findPredecessor(identifier).getLocation());
@@ -367,6 +378,7 @@ public class ChordNode implements RemoteChordNodeI {
 		return fingerTable;
 	}
 	
+	/** Receive replication request from predecessor */
 	@Override
 	public void saveReplicatedFile(String inputString, int nodesLeft) {
 		InputStream uploadInputStream = Util.stringToStream(inputString);
@@ -386,6 +398,7 @@ public class ChordNode implements RemoteChordNodeI {
 		}
 	}
 	
+	/** Send saved file down the ring to be replicated */
 	public void replicateFile(String inputStream) {
 		try {
 			if (REPLICATION_FACTOR > 0) {
@@ -393,6 +406,30 @@ public class ChordNode implements RemoteChordNodeI {
 			}
 		} catch (RemoteException e) {
 			logger.error("Failed to replicate file", e);
+		}
+	}
+	
+	/** Used to update successor list */
+	@Override
+	public void refreshSuccessors(int nodesLeft) throws RemoteException {
+		Set<Integer> seenSuccessors = new HashSet<Integer>();
+		Finger successor = getSuccessor();
+		for (int i = 0; i < REPLICATION_FACTOR; i++) {
+			if (seenSuccessors.contains(Integer.valueOf(successor.shardid))) {
+				// End of ring, set rest of list to null
+				while (i < REPLICATION_FACTOR) {
+					successorList[i] = null;
+					i++;
+				}
+				break;
+			}
+			successorList[i] = successor;
+			seenSuccessors.add(Integer.valueOf(successor.shardid));
+			successor = getChordNode(successor).getSuccessor();
+		}
+		
+		if (nodesLeft > 0) {
+			getChordNode(predecessor).refreshSuccessors(nodesLeft - 1);
 		}
 	}
 	
