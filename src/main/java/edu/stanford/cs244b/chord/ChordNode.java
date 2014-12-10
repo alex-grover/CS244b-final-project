@@ -152,20 +152,26 @@ public class ChordNode implements RemoteChordNodeI {
     			for (Finger f : remoteFingerTable) {
     				nodesToFind.add(Integer.valueOf(f.shardid));
     			}
-    			
-    			Finger successor = remoteFingerTable[0];
-    			nodesToFind.remove(Integer.valueOf(successor.shardid));
+    			// Include trusted node if it isn't in finger table
+    			nodesToFind.add(Integer.valueOf(existingLocation.shardid));
+    			// Remove node we started from
     			nodesToFind.remove(Integer.valueOf(getSuccessor().shardid));
     			
-    			// Walk successor pointers in ring
-    			while (!nodesToFind.isEmpty() && successor.shardid != getShardId() && successor.shardid != existingLocation.shardid) {
+    			// Walk successor pointers in ring. Stop when you get reach yourself or your successor.
+    			Finger successor = remoteFingerTable[0]; // actually the 2nd successor 
+    			do {
+    				// This also validates that node is reachable
+    				Finger next = getChordNode(successor).getSuccessor();
+    				
     				// Check if you found a finger you are looking for
     				Integer currId = Integer.valueOf(successor.shardid);
     				if (nodesToFind.contains(currId)) {
     					nodesToFind.remove(currId);
     				}
-    				successor = getChordNode(successor).getSuccessor();
-    			}
+    				
+    				successor = next;
+    				
+    			} while (successor.shardid != getShardId() && successor.shardid != getSuccessor().shardid);
     			
     			// If not all fingers were found, error occurred
     			if (!nodesToFind.isEmpty()) {
