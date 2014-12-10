@@ -6,6 +6,7 @@ server:
     port: 8080
 
 chord:
+  myIP: 192.168.50.1
   entryHost: 192.168.50.1
   entryPort: 8080
   identifier: sha256

@@ -22,6 +22,11 @@ public class ChordConfiguration extends Configuration {
     }
 
     public class Chord {
+        /** IP address to assign to this node */
+        @NotNull
+        @JsonProperty
+        private InetAddress myIP;
+        
         /** Host which should be queried when joining the chord ring */
         @NotNull
         @JsonProperty
@@ -37,6 +42,14 @@ public class ChordConfiguration extends Configuration {
         @JsonProperty
         private String identifier;
 
+        public InetAddress getMyIP() {
+            return myIP;
+        }
+        
+        public void setMyIP(String ipAddress) throws UnknownHostException {
+            this.myIP = InetAddress.getByName(ipAddress);
+        }
+        
         public InetAddress getEntryHost() {
             return entryHost;
         }

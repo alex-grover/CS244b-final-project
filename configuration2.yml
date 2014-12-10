@@ -3,9 +3,10 @@ server:
   applicationContextPath: /
   connector:
     type: http
-    port: 8081
+    port: 8082
 
 chord:
+  myIP: 192.168.50.2
   entryHost: 192.168.50.1
   entryPort: 8080
   identifier: sha256
