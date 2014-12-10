@@ -18,14 +18,11 @@ import edu.stanford.cs244b.Util;
 /** Core components of the Chord distributed hash table implementation.
  *  Keeps track of other shards in the ring to ensure O(log n) lookup */
 
-@SuppressWarnings("serial")
 public class ChordNode implements RemoteChordNodeI {
     Registry registry;
     
     final Shard shard;
     
-    final static int NUM_FINGERS = 32;
-//    final static int NUM_FINGERS = 1;
     final static Logger logger = LoggerFactory.getLogger(ChordNode.class);
     
     /** Location of this ChordNode, includes host ip, port, and shardid */
@@ -35,10 +32,17 @@ public class ChordNode implements RemoteChordNodeI {
      *  counterclockwise around the identifier circle */
     protected Finger predecessor;
     
+    final static int NUM_FINGERS = 32;
+//  final static int NUM_FINGERS = 1;
+    
     /** In initial Chord implementation, only maintain a pointer to
      *  the direct successor for simplicity.
      *  TODO: keep pointer to all log(n) nodes as required by Chord. */
     protected Finger[] fingerTable;
+    
+    /** List of successors, used for replication */
+    final static int FAILURES_TOLERATED = 3;
+    protected Finger[] successorList = new Finger[3 * FAILURES_TOLERATED + 1];
     
     protected Stabilizer stabilizer;
         
@@ -86,7 +90,7 @@ public class ChordNode implements RemoteChordNodeI {
             String rmiURL = remoteLocation.getRMIUrl();
             
             RemoteChordNodeI chordNode = (RemoteChordNodeI) Naming.lookup(rmiURL);
-            Finger nodeLocation = chordNode.getLocation(); // verify that we can contact ChordNode at specified location
+            // Finger nodeLocation = chordNode.getLocation(); // verify that we can contact ChordNode at specified location
             return chordNode;
         } catch (Exception e) {
             logger.error("Failed to get remote ChordNode at location "+remoteLocation, e);
@@ -137,8 +141,27 @@ public class ChordNode implements RemoteChordNodeI {
     	try {
     		predecessor = null;
     		fingerTable[0] = getChordNode(existingLocation).findSuccessor(getShardId()).getLocation();
+    		
+    		if (!isFirstNode) {
+    			// check for malicious nodes
+    			Finger[] remoteFingerTable = getChordNode(getSuccessor()).getFingerTable();
+    			Finger currNode = remoteFingerTable[0];
+    			int currIndex = 1;
+    			// Walk successor pointers in ring
+    			while (currNode.shardid != getShardId() && currNode.shardid != existingLocation.shardid) {
+    				// Check if you found a finger you are looking for
+    				if (currIndex < remoteFingerTable.length && remoteFingerTable[currIndex].shardid == currNode.shardid) {
+    					currIndex++;
+    				}
+    				currNode = getChordNode(currNode).getSuccessor();
+    			}
+    			// If not all fingers were found, error occurred
+    			if (currIndex != remoteFingerTable.length) return false;
+    		}
+    		
     		stabilizer = new Stabilizer();
     		stabilizer.start();
+    		return true;
     	} catch (RemoteException e) {
     		logger.error("Failed to get successor", e);
     	}
@@ -315,6 +338,12 @@ public class ChordNode implements RemoteChordNodeI {
 			logger.error("Error getting file", e);
 			return null;
 		}
+	}
+	
+	/** Get finger table for new node to verify */
+	@Override
+	public Finger[] getFingerTable() {
+		return fingerTable;
 	}
 	
 	/** Indicates whether successor pointers are correct */

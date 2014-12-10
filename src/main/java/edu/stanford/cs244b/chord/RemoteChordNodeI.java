@@ -46,4 +46,6 @@ public interface RemoteChordNodeI extends Remote {
     
     /** Look up file located on this server */
     public String getFile(String hash) throws RemoteException;
+    
+    public Finger[] getFingerTable() throws RemoteException;
 }
