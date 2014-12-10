@@ -16,6 +16,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import edu.stanford.cs244b.Shard;
+import edu.stanford.cs244b.Shard.IdentifierAlgorithm;
 import edu.stanford.cs244b.Util;
 
 /** Core components of the Chord distributed hash table implementation.
@@ -347,30 +348,7 @@ public class ChordNode implements RemoteChordNodeI {
     public boolean ownsIdentifier(int identifier) {
     	return Util.withinInterval(identifier, this.getShardId(), this.getSuccessor().shardid-1);
     }
-
-    /** Forward POST request to appropriate node */
-	public void forwardSave(int identifier, byte[] serialized) {
-		try {
-			RemoteChordNodeI node = getChordNode(findPredecessor(identifier).getLocation());
-			node.saveFile(serialized);
-		} catch (RemoteException e) {
-			logger.error("Error forwarding save request", e);
-		}
-	}
-	
-	/** Receive forwarded request */
-	@Override
-	public void saveFile(byte[] serialized) {
-		logger.info("Saving forwarded file");
-		InputStream uploadInputStream = new ByteArrayInputStream(serialized);
 		
-		try {
-			this.shard.saveFile(uploadInputStream, false);
-		} catch (Exception e) {
-			logger.error("Error saving file", e);
-		}
-	}
-	
 	/** Look up file on remote node */
 	public byte[] forwardLookup(int identifier, String hash) {
 		try {
@@ -400,36 +378,39 @@ public class ChordNode implements RemoteChordNodeI {
 		return fingerTable;
 	}
 	
+	/** Find node where we should start replication from, and send saved file down the ring to be replicated */
+    public void beginReplicatingFile(int identifier, byte[] data) {
+        try {
+            if (REPLICATION_FACTOR > 0) {
+                getChordNode(findPredecessor(identifier).getLocation()).replicateFile(data, REPLICATION_FACTOR);
+            }
+        } catch (RemoteException e) {
+            logger.error("Failed to replicate file", e);
+        }
+    }
+	
 	/** Receive replication request from predecessor */
 	@Override
-	public void saveReplicatedFile(byte[] input, int nodesLeft) {
-		InputStream uploadInputStream = new ByteArrayInputStream(input);
+	public void replicateFile(byte[] data, int nodesLeft) {
+		InputStream uploadInputStream = new ByteArrayInputStream(data);
 		
 		try {
-			shard.saveFile(uploadInputStream, true);
+		    // always use SHA256_REPLICATE for replicated files, since
+            // only the user's node has secret key for HMAC
+			shard.saveFile(uploadInputStream, IdentifierAlgorithm.SHA256_REPLICATE);
 		} catch (Exception e) {
 			logger.error("Failed to save replicated file", e);
 		}
 		
 		if (nodesLeft > 0) {
 			try {
-				getChordNode(getSuccessor()).saveReplicatedFile(input, nodesLeft - 1);
+				getChordNode(getSuccessor()).replicateFile(data, nodesLeft - 1);
 			} catch (RemoteException e) {
 				logger.error("Failed to replicate file further", e);
 			}
 		}
 	}
-	
-	/** Send saved file down the ring to be replicated */
-	public void replicateFile(byte[] input) {
-		try {
-			if (REPLICATION_FACTOR > 0) {
-				getChordNode(getSuccessor()).saveReplicatedFile(input, REPLICATION_FACTOR - 1);
-			}
-		} catch (RemoteException e) {
-			logger.error("Failed to replicate file", e);
-		}
-	}
+
 	
 	/** Used to update successor list */
 	@Override

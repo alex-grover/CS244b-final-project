@@ -61,6 +61,9 @@ import java.util.concurrent.atomic.AtomicLong;
 // TODO: return JSON? or some binary format like protobuf?
 public class Shard {
     public enum IdentifierAlgorithm {
+        // indicates that this node is only replicating an existing file
+        // (which may be verified by another algorithm on the uploader user's node)
+        SHA256_REPLICATE, 
         SHA256_NOVERIFY, // don't verify hash on read
         SHA256, // verify hash on read
         HMAC_SHA256 // use keyed message authentication code
@@ -76,6 +79,7 @@ public class Shard {
     private final String KEY_FILE;
     private final String TEMP_DIR;
     private final String DATA_DIR;
+    private final String REPLICA_DIR;
     
     public IdentifierAlgorithm identifierAlgo;
     SecretKeySpec secretKey;
@@ -93,10 +97,12 @@ public class Shard {
         // create temporary directories and key for this shard
         TEMP_DIR = "temp-"+hexShardId+"-"+myPort;
         DATA_DIR = "data-"+hexShardId+"-"+myPort;
+        REPLICA_DIR = "replica-"+hexShardId+"-"+myPort;
         KEY_FILE = "key-"+hexShardId+"-"+myPort+".txt";
         
         (new File(TEMP_DIR)).mkdir();
         (new File(DATA_DIR)).mkdir();
+        (new File(REPLICA_DIR)).mkdir();
         
         // determine algorithm used to generate identifiers for objects added to chord ring
         String identifierAlgoName = chordConfig.getIdentifier().toLowerCase();
@@ -167,7 +173,7 @@ public class Shard {
             //@FormDataParam("file") final FormDataContentDisposition contentDispositionHeader
             //@FormDataParam("fileBodyPart") FormDataBodyPart body
             ) throws NoSuchAlgorithmException, IOException, InvalidKeyException, NoSuchProviderException {
-        final String objectId = saveFile(uploadInputStream, false);
+        final String objectId = saveFile(uploadInputStream, identifierAlgo);
         return new HashMap<String,Object>() {{
             put("shard", shardIdAsHex());
             put("id", objectId);
@@ -179,54 +185,61 @@ public class Shard {
      * @throws IOException 
      * @throws InvalidKeyException 
      * @throws NoSuchProviderException */ 
-    public String saveFile(InputStream uploadInputStream, boolean isReplicatedFile)
+    public String saveFile(InputStream uploadInputStream, IdentifierAlgorithm algo)
             throws NoSuchAlgorithmException, IOException, InvalidKeyException, NoSuchProviderException {
-        byte[] digest;
-        InputStream wrappedInputStream;
+        
+        // assume SHA256, SHA256_NOVERIFY, or SHA256_REPLICATE
         MessageDigest sha256 = MessageDigest.getInstance("SHA-256");
-        if (identifierAlgo.equals(IdentifierAlgorithm.HMAC_SHA256)) {
-            wrappedInputStream = new HMACInputStream(uploadInputStream, secretKey);
-        } else {
-            // assume SHA256 or SHA256_NOVERIFY
-            wrappedInputStream = new DigestInputStream(uploadInputStream, sha256);
-        }
+        InputStream wrappedInputStream = new DigestInputStream(uploadInputStream, sha256);
         
-        // write file to temporary location
+        byte[] serializedFile;
+        HMACInputStream hmacInputStream = null;
+        // convert to byte[] to consume inputStream and perform hash computation
+        if (algo.equals(IdentifierAlgorithm.HMAC_SHA256)) {
+            hmacInputStream = new HMACInputStream(wrappedInputStream, secretKey);
+            serializedFile = IOUtils.toByteArray(hmacInputStream);
+            hmacInputStream.close();
+        } else {
+            serializedFile = IOUtils.toByteArray(wrappedInputStream);
+        }
+        wrappedInputStream.close();
+        
+        // always compute SHA-256 hash
+        byte[] sha256Digest = sha256.digest();
+        String sha256Hash = Hex.encodeHexString(sha256Digest);
+        
+        // checksum computed via user-specified algorithm
+        String userChecksum = sha256Hash;
+        if (algo.equals(IdentifierAlgorithm.HMAC_SHA256)){
+            byte[] hmacDigest = hmacInputStream.getDigest();
+            userChecksum = Hex.encodeHexString(hmacDigest);
+        }
+        // TODO: return hmacDigest to uploader user? or register somewhere in the shard...
+        
+        // write to file
         java.nio.file.Path tempPath = Paths.get(TEMP_DIR, UUID.randomUUID().toString());
-        Files.copy(wrappedInputStream, tempPath);
+        Files.write(tempPath, serializedFile);
         
-        if (identifierAlgo.equals(IdentifierAlgorithm.HMAC_SHA256)){
-            digest = ((HMACInputStream) wrappedInputStream).getDigest();
+        // TODO: verify that hash is correct on read to account for disk failure?
+
+        if (algo.equals(IdentifierAlgorithm.SHA256_REPLICATE)) {
+            // remote node is asking us to replicate this file for them in REPLICA_DIR
+            logger.info("Saving replica to disk as "+sha256Hash);
+            java.nio.file.Path outputPath = Paths.get(REPLICA_DIR, sha256Hash);
+            Files.move(tempPath, outputPath, StandardCopyOption.ATOMIC_MOVE);
+
         } else {
-            // compute SHA-256 hash for both standard and noverify
-            digest = sha256.digest();
+            // this is uploader user's node, save file to disk in DATA directory
+            logger.info("Saving new file to disk");
+            java.nio.file.Path outputPath = Paths.get(DATA_DIR, userChecksum);
+            Files.move(tempPath, outputPath, StandardCopyOption.ATOMIC_MOVE);
+            
+            // Start replication process
+            int identifier = Util.hexStringToIdentifier(sha256Hash);
+            node.beginReplicatingFile(identifier, serializedFile);
         }
         
-        String hexadecimalHash = Hex.encodeHexString(digest);
-        
-        // TODO: verify that hash is correct
-        
-        int identifier = Util.hexStringToIdentifier(hexadecimalHash);
-        if (node.ownsIdentifier(identifier) || isReplicatedFile) {
-        	logger.info("Saving file to disk");
-        	// save file to disk
-        	java.nio.file.Path outputPath = Paths.get(DATA_DIR, hexadecimalHash);
-        	Files.move(tempPath, outputPath, StandardCopyOption.ATOMIC_MOVE);
-        	
-        	if (!isReplicatedFile) {
-        		// Start replication process
-        		byte[] serializedFile = IOUtils.toByteArray(uploadInputStream);
-        		node.replicateFile(serializedFile);
-        	}
-        } else {
-        	logger.info("posting file to remote server");
-        	// forward request to appropriate node
-        	byte[] serializedFile = IOUtils.toByteArray(uploadInputStream);
-        	node.forwardSave(identifier, serializedFile);
-        	Files.delete(tempPath);
-        }
-        
-        return hexadecimalHash;
+        return sha256Hash;
     }
     
     /** Update an existing item in the distributed hash table */
