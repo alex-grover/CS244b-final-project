@@ -60,19 +60,4 @@ public class Util {
     public static int hexStringToIdentifier(String hash) {
     	return Integer.parseInt(hash.substring(0, 4), 16);
     }
-    
-    public static String streamToString(InputStream stream) throws IOException {
-    	StringBuilder inputStringBuilder = new StringBuilder();
-        BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(stream, "UTF-8"));
-        String line = bufferedReader.readLine();
-        while (line != null) {
-            inputStringBuilder.append(line);inputStringBuilder.append('\n');
-            line = bufferedReader.readLine();
-        }
-        return inputStringBuilder.toString();
-    }
-    
-    public static InputStream stringToStream(String inputString) {
-    	return new ByteArrayInputStream(inputString.getBytes());
-    }
 }

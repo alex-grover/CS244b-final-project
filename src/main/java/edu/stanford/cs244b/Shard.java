@@ -42,6 +42,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.NoSuchProviderException;
 import java.security.Security;
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -214,13 +215,13 @@ public class Shard {
         	
         	if (!isReplicatedFile) {
         		// Start replication process
-        		String serializedFile = Util.streamToString(uploadInputStream);
+        		byte[] serializedFile = IOUtils.toByteArray(uploadInputStream);
         		node.replicateFile(serializedFile);
         	}
         } else {
         	logger.info("posting file to remote server");
         	// forward request to appropriate node
-        	String serializedFile = Util.streamToString(uploadInputStream);
+        	byte[] serializedFile = IOUtils.toByteArray(uploadInputStream);
         	node.forwardSave(identifier, serializedFile);
         	Files.delete(tempPath);
         }
@@ -252,13 +253,13 @@ public class Shard {
     		int identifier = Util.hexStringToIdentifier(idString);
     		if (!node.ownsIdentifier(identifier)) {
     			logger.info("File doesn't exist, forwarding request");
-    			String res = node.forwardLookup(identifier, idString);
+    			byte[] res = node.forwardLookup(identifier, idString);
     			
     			if (res == null) {
     				return Responses.notFound().build();
     			}
     			
-    			InputStream downloadInputStream = Util.stringToStream(res);
+    			InputStream downloadInputStream = new ByteArrayInputStream(res);
     			return processFile(downloadInputStream, idString);
     		} else {
     			return Responses.notFound().build();
@@ -266,12 +267,12 @@ public class Shard {
         }
     }
     
-    public String getItemAsString(String idString) throws DecoderException, IOException, NoSuchAlgorithmException, InvalidKeyException, NoSuchProviderException {
+    public byte[] getItemAsByteArray(String idString) throws DecoderException, IOException, NoSuchAlgorithmException, InvalidKeyException, NoSuchProviderException {
         java.nio.file.Path filePath = Paths.get(DATA_DIR, idString);
         if (Files.exists(filePath)) {
-        	logger.info("Getting file for remote server as string");
+        	logger.info("Getting file for remote server as byte[]");
             InputStream downloadInputStream = Files.newInputStream(filePath);
-            return Util.streamToString(downloadInputStream);
+            return IOUtils.toByteArray(downloadInputStream);
         } 
         return null;
     }

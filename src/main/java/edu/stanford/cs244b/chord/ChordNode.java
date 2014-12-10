@@ -1,5 +1,6 @@
 package edu.stanford.cs244b.chord;
 
+import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.net.InetAddress;
 import java.rmi.Naming;
@@ -327,10 +328,10 @@ public class ChordNode implements RemoteChordNodeI {
     }
 
     /** Forward POST request to appropriate node */
-	public void forwardSave(int identifier, String inputString) {
+	public void forwardSave(int identifier, byte[] serialized) {
 		try {
 			RemoteChordNodeI node = getChordNode(findPredecessor(identifier).getLocation());
-			node.saveFile(inputString);
+			node.saveFile(serialized);
 		} catch (RemoteException e) {
 			logger.error("Error forwarding save request", e);
 		}
@@ -338,9 +339,9 @@ public class ChordNode implements RemoteChordNodeI {
 	
 	/** Receive forwarded request */
 	@Override
-	public void saveFile(String inputString) {
+	public void saveFile(byte[] serialized) {
 		logger.info("Saving forwarded file");
-		InputStream uploadInputStream = Util.stringToStream(inputString);
+		InputStream uploadInputStream = new ByteArrayInputStream(serialized);
 		
 		try {
 			this.shard.saveFile(uploadInputStream, false);
@@ -350,7 +351,7 @@ public class ChordNode implements RemoteChordNodeI {
 	}
 	
 	/** Look up file on remote node */
-	public String forwardLookup(int identifier, String hash) {
+	public byte[] forwardLookup(int identifier, String hash) {
 		try {
 			RemoteChordNodeI node = getChordNode(findPredecessor(identifier).getLocation());
 			return node.getFile(hash);
@@ -362,10 +363,10 @@ public class ChordNode implements RemoteChordNodeI {
 
 	/** Remote method to return item if contained on this server */
 	@Override
-	public String getFile(String hash) {
+	public byte[] getFile(String hash) {
 		logger.info("Looking up object for remote server");
 		try {
-			return this.shard.getItemAsString(hash);
+			return this.shard.getItemAsByteArray(hash);
 		} catch (Exception e) {
 			logger.error("Error getting file", e);
 			return null;
@@ -380,8 +381,8 @@ public class ChordNode implements RemoteChordNodeI {
 	
 	/** Receive replication request from predecessor */
 	@Override
-	public void saveReplicatedFile(String inputString, int nodesLeft) {
-		InputStream uploadInputStream = Util.stringToStream(inputString);
+	public void saveReplicatedFile(byte[] input, int nodesLeft) {
+		InputStream uploadInputStream = new ByteArrayInputStream(input);
 		
 		try {
 			shard.saveFile(uploadInputStream, true);
@@ -391,7 +392,7 @@ public class ChordNode implements RemoteChordNodeI {
 		
 		if (nodesLeft > 0) {
 			try {
-				getChordNode(getSuccessor()).saveReplicatedFile(inputString, nodesLeft - 1);
+				getChordNode(getSuccessor()).saveReplicatedFile(input, nodesLeft - 1);
 			} catch (RemoteException e) {
 				logger.error("Failed to replicate file further", e);
 			}
@@ -399,10 +400,10 @@ public class ChordNode implements RemoteChordNodeI {
 	}
 	
 	/** Send saved file down the ring to be replicated */
-	public void replicateFile(String inputStream) {
+	public void replicateFile(byte[] input) {
 		try {
 			if (REPLICATION_FACTOR > 0) {
-				getChordNode(getSuccessor()).saveReplicatedFile(inputStream, REPLICATION_FACTOR - 1);
+				getChordNode(getSuccessor()).saveReplicatedFile(input, REPLICATION_FACTOR - 1);
 			}
 		} catch (RemoteException e) {
 			logger.error("Failed to replicate file", e);
