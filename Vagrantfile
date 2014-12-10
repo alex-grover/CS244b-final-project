@@ -15,7 +15,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   config.vm.provision "shell", path: "scripts/bootstrap.sh"
   
   # Boot 2 virtual machines
-  (1..3).each do |i|
+  (1..5).each do |i|
     config.vm.define "cs244b-#{i}" do |s|
       s.vm.provision "file", source: "configuration#{i}.yml", destination: "configuration#{i}.yml"
       s.vm.provision "file", source: "target/cs244b-final-project-0.0.1-SNAPSHOT.jar", destination: "cs244b-final-project.jar"

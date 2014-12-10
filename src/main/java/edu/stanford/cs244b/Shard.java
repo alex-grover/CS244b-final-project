@@ -166,7 +166,7 @@ public class Shard {
             //@FormDataParam("file") final FormDataContentDisposition contentDispositionHeader
             //@FormDataParam("fileBodyPart") FormDataBodyPart body
             ) throws NoSuchAlgorithmException, IOException, InvalidKeyException, NoSuchProviderException {
-        final String objectId = saveFile(uploadInputStream);
+        final String objectId = saveFile(uploadInputStream, false);
         return new HashMap<String,Object>() {{
             put("shard", shardIdAsHex());
             put("id", objectId);
@@ -178,7 +178,7 @@ public class Shard {
      * @throws IOException 
      * @throws InvalidKeyException 
      * @throws NoSuchProviderException */ 
-    public String saveFile(InputStream uploadInputStream)
+    public String saveFile(InputStream uploadInputStream, boolean isReplicatedFile)
             throws NoSuchAlgorithmException, IOException, InvalidKeyException, NoSuchProviderException {
         byte[] digest;
         InputStream wrappedInputStream;
@@ -203,14 +203,20 @@ public class Shard {
         
         String hexadecimalHash = Hex.encodeHexString(digest);
         
-        // TODO: verify that hash is correct, distribute to other replicas...
+        // TODO: verify that hash is correct
         
         int identifier = Util.hexStringToIdentifier(hexadecimalHash);
-        if (node.ownsIdentifier(identifier)) {
+        if (node.ownsIdentifier(identifier) || isReplicatedFile) {
         	logger.info("Saving file to disk");
         	// save file to disk
         	java.nio.file.Path outputPath = Paths.get(DATA_DIR, hexadecimalHash);
         	Files.move(tempPath, outputPath, StandardCopyOption.ATOMIC_MOVE);
+        	
+        	if (!isReplicatedFile) {
+        		// Start replication process
+        		String serializedFile = Util.streamToString(uploadInputStream);
+        		node.replicateFile(serializedFile);
+        	}
         } else {
         	logger.info("posting file to remote server");
         	// forward request to appropriate node

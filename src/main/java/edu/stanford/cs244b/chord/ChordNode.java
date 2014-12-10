@@ -35,16 +35,15 @@ public class ChordNode implements RemoteChordNodeI {
     protected Finger predecessor;
     
     final static int NUM_FINGERS = 32;
-//  final static int NUM_FINGERS = 1;
     
     /** In initial Chord implementation, only maintain a pointer to
      *  the direct successor for simplicity.
      *  TODO: keep pointer to all log(n) nodes as required by Chord. */
     protected Finger[] fingerTable;
     
-    /** List of successors, used for replication */
-    final static int FAILURES_TOLERATED = 3;
-    protected Finger[] successorList = new Finger[3 * FAILURES_TOLERATED + 1];
+    /** Each file is sent to REPLICATION_FACTOR nodes in
+     *  addition to the origin node. */
+    final static int REPLICATION_FACTOR = 1;
     
     protected Stabilizer stabilizer;
         
@@ -328,7 +327,7 @@ public class ChordNode implements RemoteChordNodeI {
 		InputStream uploadInputStream = Util.stringToStream(inputString);
 		
 		try {
-			this.shard.saveFile(uploadInputStream);
+			this.shard.saveFile(uploadInputStream, false);
 		} catch (Exception e) {
 			logger.error("Error saving file", e);
 		}
@@ -360,6 +359,35 @@ public class ChordNode implements RemoteChordNodeI {
 	@Override
 	public Finger[] getFingerTable() {
 		return fingerTable;
+	}
+	
+	@Override
+	public void saveReplicatedFile(String inputString, int nodesLeft) {
+		InputStream uploadInputStream = Util.stringToStream(inputString);
+		
+		try {
+			shard.saveFile(uploadInputStream, true);
+		} catch (Exception e) {
+			logger.error("Failed to save replicated file", e);
+		}
+		
+		if (nodesLeft > 0) {
+			try {
+				getChordNode(getSuccessor()).saveReplicatedFile(inputString, nodesLeft - 1);
+			} catch (RemoteException e) {
+				logger.error("Failed to replicate file further", e);
+			}
+		}
+	}
+	
+	public void replicateFile(String inputStream) {
+		try {
+			if (REPLICATION_FACTOR > 0) {
+				getChordNode(getSuccessor()).saveReplicatedFile(inputStream, REPLICATION_FACTOR - 1);
+			}
+		} catch (RemoteException e) {
+			logger.error("Failed to replicate file", e);
+		}
 	}
 	
 	/** Indicates whether successor pointers are correct */
