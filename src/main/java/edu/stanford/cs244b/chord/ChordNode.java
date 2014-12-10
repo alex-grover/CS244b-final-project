@@ -150,7 +150,12 @@ public class ChordNode implements RemoteChordNodeI {
     	try {
     		predecessor = null;
     		fingerTable[0] = getChordNode(existingLocation).findSuccessor(getShardId()).getLocation();
+    	} catch (RemoteException e) {
+    		logger.error("Trusted node is unreachable. Failed to join ring. Exiting...");
+    		System.exit(1);
+    	}
     		
+    	try {
     		if (!isFirstNode) {
     			// check for malicious nodes
     			Finger[] remoteFingerTable = getChordNode(getSuccessor()).getFingerTable();
@@ -166,6 +171,7 @@ public class ChordNode implements RemoteChordNodeI {
     			nodesToFind.remove(Integer.valueOf(getSuccessor().shardid));
     			
     			// Walk successor pointers in ring. Stop when you get reach yourself or your successor.
+    			// TODO: this will not terminate if the ring has a cycle 
     			Finger successor = remoteFingerTable[0]; // actually the 2nd successor 
     			do {
     				// This also validates that node is reachable
@@ -178,42 +184,55 @@ public class ChordNode implements RemoteChordNodeI {
     				}
     				
     				successor = next;
-    				
     			} while (successor.shardid != getShardId() && successor.shardid != getSuccessor().shardid);
     			
     			// If not all fingers were found, error occurred
+    			// TODO: handle nodes in finger table leaving before they are found
     			if (!nodesToFind.isEmpty()) {
-    				logger.error("WARNING: MALICIOUS NODE, FAILED TO JOIN RING");
-    				return false;
+    				logger.error("Not all trusted nodes were found in ring during join. Failed to join ring. Exiting...");
+    				System.exit(1);
     			}
     		}
     		
     		refreshSuccessors(0);
     		
-    		stabilizer = new Stabilizer();
-    		stabilizer.start();
-    		return true;
     	} catch (RemoteException e) {
-    		logger.error("Failed to get successor", e);
+    		logger.error("Failed to find successor node while walking ring. Ring is corrupted or contains malicious nodes. Exiting...", e);
+    		System.exit(1);
     	}
-    	return false;
+    	
+		stabilizer = new Stabilizer();
+		stabilizer.start();
+		return true;
     }
     
     /** Periodically run to verify successor relationship */
     public void stabilize() {
+    	RemoteChordNodeI successor = null;
+    	Finger x = null;
     	try {
-    		Finger x = getChordNode(getSuccessor()).getPredecessor();
-    		if (x != null &&
-                    Util.withinInterval(x.shardid, location.shardid+1, getSuccessor().shardid-1)) {
-    			logger.info("Updating successor from "+Integer.toHexString(getSuccessor().shardid)+" to "+Integer.toHexString(x.shardid));
-    		    fingerTable[0] = x;
-    		    getChordNode(predecessor).refreshSuccessors(REPLICATION_FACTOR - 1);
-    		}
-    		RemoteChordNodeI successor = getChordNode(getSuccessor());
-    		successor.notifyPredecessor(location);
+    		successor = getChordNode(getSuccessor());
+    		x = successor.getPredecessor();
     	} catch (RemoteException e) {
-    		logger.error("Failed to update and notify successor", e);
+    		updateSuccessor();
     	}
+    	
+		if (x != null && Util.withinInterval(x.shardid, location.shardid+1, getSuccessor().shardid-1)) {
+			logger.info("Updating successor from "+Integer.toHexString(getSuccessor().shardid)+" to "+Integer.toHexString(x.shardid));
+		    fingerTable[0] = x;
+		    try {
+		    	// Tell precedessors to refresh successor list
+		    	getChordNode(predecessor).refreshSuccessors(REPLICATION_FACTOR - 1);
+		    } catch (RemoteException e) {
+		    	logger.error("Failed to notify predecessor of changed successor");
+		    }
+		}
+		
+		try {
+			successor.notifyPredecessor(location);
+		} catch (RemoteException e) {
+			updateSuccessor();
+		}
     }
     
     /** Notify node of request to become predecessor */
@@ -230,7 +249,7 @@ public class ChordNode implements RemoteChordNodeI {
     public void fixFingers() {
     	try {
 	    	Random rgen = new Random();
-	    	int i = rgen.nextInt(NUM_FINGERS - 1) + 1;
+	    	int i = rgen.nextInt(NUM_FINGERS - 1) + 1; // TODO: use power of 2 here
 	    	Finger f = findSuccessor(fingerTable[i].shardid).getLocation();
 //	    	logger.info("Updating fingerTable[" + i + "] from "+ fingerTable[i] + " to " + f);
 	    	fingerTable[i] = f;
@@ -275,7 +294,7 @@ public class ChordNode implements RemoteChordNodeI {
     }
     
     /** Leave Chord ring and update other nodes */
-    public void leave() {
+    public void leave(int exitCode) {
     	if (this.location.host == predecessor.host) {
     		return;
     	}
@@ -288,17 +307,19 @@ public class ChordNode implements RemoteChordNodeI {
     		logger.error("Failed to set successor's predecessor", e);
     	}
     	
-    	for (int i=0; i < NUM_FINGERS; i++) {
-    		int fingerValue = (location.shardid - (1 << i))+1;
+    	for (int i = 0; i < NUM_FINGERS; i++) {
+    		int fingerValue = (location.shardid - (1 << i)) + 1;
     		
     		try {
     			RemoteChordNodeI p = findPredecessor(fingerValue);
     			p.removeNode(this, i, getSuccessor());
     		} catch (RemoteException e) {
-    			logger.error("Failed to find predecessor", e);
+    			logger.error("Failed to notify predecessor or node leaving", e);
     		}
     		
     	}
+    	
+    	System.exit(exitCode);
     }
     
     @Override
@@ -438,6 +459,30 @@ public class ChordNode implements RemoteChordNodeI {
 	public boolean stable() {
 		return getSuccessor().shardid != location.shardid;
 	}
+	
+	/** Try successor list if successor is unreachable */
+	public void updateSuccessor() {
+		boolean success = false;
+		
+		for (int i = 1; i < REPLICATION_FACTOR; i++) {
+			fingerTable[0] = successorList[i];
+			try {
+				// Update successor list using new direct successor
+				refreshSuccessors(0);
+				success = true;
+				break;
+			} catch (RemoteException e) {
+				logger.error("Unreachable successor in successorList", e);
+			}
+		}
+		
+		if (success) {
+			logger.info("Successfully recovered from successor failure");
+		} else {
+			logger.error("All successors are unreachable. Exiting...");
+			leave(1);
+		}
+	}
     
     public class Stabilizer extends Thread {
         final static int SLEEP_MILLIS = 1000;
@@ -452,7 +497,7 @@ public class ChordNode implements RemoteChordNodeI {
                     Thread.sleep(SLEEP_MILLIS);
                 }
             } catch (InterruptedException e) {
-                logger.info("Exiting...", e);
+                logger.info("Stabilizer exiting...", e);
             }
         }
         
