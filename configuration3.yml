@@ -5,6 +5,10 @@ server:
     type: http
     port: 8084
 
+assets:
+  overrides:
+    /: src/main/resources/assets/
+
 chord:
   myIP: 192.168.50.3
   entryHost: 192.168.50.1
