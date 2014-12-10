@@ -58,6 +58,6 @@ public class Util {
     }
     
     public static int hexStringToIdentifier(String hash) {
-    	return Integer.parseInt(hash.substring(0, 4), 16);
+    	return Integer.parseInt(hash.substring(0, 8), 16);
     }
 }
