@@ -8,11 +8,24 @@ import javax.validation.constraints.Max;
 import javax.validation.constraints.Min;
 import javax.validation.constraints.NotNull;
 
+import com.bazaarvoice.dropwizard.assets.AssetsBundleConfiguration;
+import com.bazaarvoice.dropwizard.assets.AssetsConfiguration;
+
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import io.dropwizard.Configuration;
 
-public class ChordConfiguration extends Configuration {
+public class ChordConfiguration extends Configuration implements AssetsBundleConfiguration {
+    @Valid
+    @NotNull
+    @JsonProperty
+    private final AssetsConfiguration assets = new AssetsConfiguration();
+
+    @Override
+    public AssetsConfiguration getAssetsConfiguration() {
+      return assets;
+    }
+    
     @Valid
     @NotNull
     private Chord chord = new Chord();

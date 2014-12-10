@@ -3,7 +3,12 @@ package edu.stanford.cs244b;
 import java.net.UnknownHostException;
 import java.security.NoSuchAlgorithmException;
 
+import com.bazaarvoice.dropwizard.assets.ConfiguredAssetsBundle;
+
 import io.dropwizard.Application;
+import io.dropwizard.Bundle;
+import io.dropwizard.Configuration;
+import io.dropwizard.assets.AssetsBundle;
 import io.dropwizard.jetty.HttpConnectorFactory;
 import io.dropwizard.server.SimpleServerFactory;
 import io.dropwizard.setup.Bootstrap;
@@ -23,12 +28,16 @@ public class Server extends Application<ChordConfiguration> {
 
     @Override
     public void initialize(Bootstrap<ChordConfiguration> bootstrap) {
-        swaggerDropwizard.onInitialize(bootstrap);
+        //bootstrap.addBundle(new AssetsBundle("/assets", "/", "index.html"));
+        bootstrap.addBundle(new ConfiguredAssetsBundle("/assets/", "/", "index.html"));
+        //swaggerDropwizard.onInitialize(bootstrap);
     }
 
     @Override
     public void run(ChordConfiguration configuration,
                     Environment environment) throws UnknownHostException, NoSuchAlgorithmException {
+        environment.jersey().setUrlPattern("/shard/*");
+        
         // TODO: ensure each shard is uniquely identified/numbered...
         
         // pass in the http server configuration
@@ -42,7 +51,7 @@ public class Server extends Application<ChordConfiguration> {
         // TODO: automatically discover shards from other servers?
         
         // add api documentation ui
-        swaggerDropwizard.onRun(configuration, environment, "localhost");
+        //swaggerDropwizard.onRun(configuration, environment, "localhost");
     }
 
 }
