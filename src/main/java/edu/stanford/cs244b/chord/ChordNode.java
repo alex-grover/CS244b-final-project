@@ -7,7 +7,9 @@ import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
+import java.util.HashSet;
 import java.util.Random;
+import java.util.Set;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -145,18 +147,29 @@ public class ChordNode implements RemoteChordNodeI {
     		if (!isFirstNode) {
     			// check for malicious nodes
     			Finger[] remoteFingerTable = getChordNode(getSuccessor()).getFingerTable();
-    			Finger currNode = remoteFingerTable[0];
-    			int currIndex = 1;
-    			// Walk successor pointers in ring
-    			while (currNode.shardid != getShardId() && currNode.shardid != existingLocation.shardid) {
-    				// Check if you found a finger you are looking for
-    				if (currIndex < remoteFingerTable.length && remoteFingerTable[currIndex].shardid == currNode.shardid) {
-    					currIndex++;
-    				}
-    				currNode = getChordNode(currNode).getSuccessor();
+    			
+    			// Nodes we must find
+    			Set<Integer> nodesToFind = new HashSet<Integer>();
+    			for (Finger f : remoteFingerTable) {
+    				nodesToFind.add(Integer.valueOf(f.shardid));
     			}
+    			
+    			Finger successor = remoteFingerTable[0];
+    			nodesToFind.remove(Integer.valueOf(successor.shardid));
+    			
+    			// Walk successor pointers in ring
+    			logger.info("Walking successor ring starting at: " + Integer.toHexString(successor.shardid));
+    			while (!nodesToFind.isEmpty() && successor.shardid != getShardId() && successor.shardid != existingLocation.shardid) {
+    				// Check if you found a finger you are looking for
+    				Integer currId = Integer.valueOf(successor.shardid);
+    				if (nodesToFind.contains(currId)) {
+    					nodesToFind.remove(currId);
+    				}
+    				successor = getChordNode(successor).getSuccessor();
+    			}
+    			
     			// If not all fingers were found, error occurred
-    			if (currIndex != remoteFingerTable.length) return false;
+    			if (!nodesToFind.isEmpty()) return false;
     		}
     		
     		stabilizer = new Stabilizer();
