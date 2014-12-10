@@ -156,9 +156,9 @@ public class ChordNode implements RemoteChordNodeI {
     			
     			Finger successor = remoteFingerTable[0];
     			nodesToFind.remove(Integer.valueOf(successor.shardid));
+    			nodesToFind.remove(Integer.valueOf(getSuccessor().shardid));
     			
     			// Walk successor pointers in ring
-    			logger.info("Walking successor ring starting at: " + Integer.toHexString(successor.shardid));
     			while (!nodesToFind.isEmpty() && successor.shardid != getShardId() && successor.shardid != existingLocation.shardid) {
     				// Check if you found a finger you are looking for
     				Integer currId = Integer.valueOf(successor.shardid);
@@ -169,7 +169,10 @@ public class ChordNode implements RemoteChordNodeI {
     			}
     			
     			// If not all fingers were found, error occurred
-    			if (!nodesToFind.isEmpty()) return false;
+    			if (!nodesToFind.isEmpty()) {
+    				logger.error("WARNING: MALICIOUS NODE, FAILED TO JOIN RING");
+    				return false;
+    			}
     		}
     		
     		stabilizer = new Stabilizer();
@@ -213,7 +216,7 @@ public class ChordNode implements RemoteChordNodeI {
 	    	Random rgen = new Random();
 	    	int i = rgen.nextInt(NUM_FINGERS - 1) + 1;
 	    	Finger f = findSuccessor(fingerTable[i].shardid).getLocation();
-	    	logger.info("Updating fingerTable[" + i + "] from "+ fingerTable[i] + " to " + f);
+//	    	logger.info("Updating fingerTable[" + i + "] from "+ fingerTable[i] + " to " + f);
 	    	fingerTable[i] = f;
     	} catch (RemoteException e) {
     		logger.error("Failed to update finger table", e);
@@ -373,7 +376,7 @@ public class ChordNode implements RemoteChordNodeI {
                 while (!Thread.currentThread().isInterrupted()) {
                     stabilize();
                     fixFingers();
-                    logger.info("Node "+Integer.toHexString(location.shardid)+" predecessor="+Integer.toHexString(predecessor.shardid)+" successor="+Integer.toHexString(fingerTable[0].shardid));
+//                    logger.info("Node "+Integer.toHexString(location.shardid)+" predecessor="+Integer.toHexString(predecessor.shardid)+" successor="+Integer.toHexString(fingerTable[0].shardid));
                     Thread.sleep(SLEEP_MILLIS);
                 }
             } catch (InterruptedException e) {
