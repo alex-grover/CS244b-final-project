@@ -17,8 +17,9 @@ import edu.stanford.cs244b.Util;
 
 /** Core components of the Chord distributed hash table implementation.
  *  Keeps track of other shards in the ring to ensure O(log n) lookup */
+
 @SuppressWarnings("serial")
-public class ChordNode extends UnicastRemoteObject implements RemoteChordNodeI {
+public class ChordNode implements RemoteChordNodeI {
     Registry registry;
     
     final Shard shard;
@@ -51,8 +52,11 @@ public class ChordNode extends UnicastRemoteObject implements RemoteChordNodeI {
         for (int index=0; index < NUM_FINGERS; index++) {
             fingerTable[index] = location;
         }
-        String ipAddress=host.getHostAddress();
-        System.getProperties().put("java.rmi.server.hostname", ipAddress);
+        
+        // insane hack to get RMI working in virtualbox
+        System.getProperties().put("java.rmi.server.hostname", host.getHostAddress());
+        RemoteChordNodeI stub = (RemoteChordNodeI) UnicastRemoteObject.exportObject(this, 0);
+
         try {
         	registry = LocateRegistry.createRegistry(port);
         } catch (Exception e) {
@@ -62,7 +66,8 @@ public class ChordNode extends UnicastRemoteObject implements RemoteChordNodeI {
         	// insert ChordNode into RMI registry
             String rmiURL = location.getRMIUrl();
         	logger.info("Binding to registry at "+rmiURL);
-        	Naming.rebind(rmiURL, this);
+        	Naming.bind(rmiURL, stub);
+
         } catch (Exception e) {
         	logger.error("Registering host "+host+" in Chord ring with shardId="+shardIdAsHex()+" FAILED");
         	e.printStackTrace();
@@ -74,9 +79,14 @@ public class ChordNode extends UnicastRemoteObject implements RemoteChordNodeI {
         try {
             // OMG, figuring this out was painful...
             // http://euclid.nmu.edu/~rappleto/Classes/RMI/rmi-coding.html
+            
+            // insane hack to get RMI working in virtualbox
+            System.getProperties().put("java.rmi.server.hostname", remoteLocation.host.getHostAddress());
+            //Registry registry = LocateRegistry.getRegistry(remoteLocation.host.getHostAddress(), remoteLocation.port);
             String rmiURL = remoteLocation.getRMIUrl();
+            
             RemoteChordNodeI chordNode = (RemoteChordNodeI) Naming.lookup(rmiURL);
-            // Finger nodeLocation = chordNode.getLocation(); // verify that we can contact ChordNode at specified location (necessary?)
+            Finger nodeLocation = chordNode.getLocation(); // verify that we can contact ChordNode at specified location
             return chordNode;
         } catch (Exception e) {
             logger.error("Failed to get remote ChordNode at location "+remoteLocation, e);
@@ -139,11 +149,13 @@ public class ChordNode extends UnicastRemoteObject implements RemoteChordNodeI {
     public void stabilize() {
     	try {
     		Finger x = getChordNode(getSuccessor()).getPredecessor();
+
     		if (x != null && Util.withinInterval(x.shardid, getShardId() + 1, getSuccessor().shardid)) {
     			logger.info("Updating successor from "+Integer.toHexString(getSuccessor().shardid)+" to "+Integer.toHexString(x.shardid));
     			fingerTable[0] = x;
     		}
-    		getChordNode(getSuccessor()).notifyPredecessor(location);
+    		RemoteChordNodeI remote = getChordNode(getSuccessor());
+    		remote.notifyPredecessor(location);
     	} catch (RemoteException e) {
     		logger.error("Failed to update and notify successor", e);
     	}
@@ -180,8 +192,8 @@ public class ChordNode extends UnicastRemoteObject implements RemoteChordNodeI {
     @Override
     public RemoteChordNodeI findPredecessor(int identifier) throws RemoteException {
         RemoteChordNodeI next = this;
-//        logger.info("FindPredecessor for id="+Integer.toHexString(identifier)+" next_shardid="+Integer.toHexString(next.getShardId()));
-        while (!Util.withinInterval(identifier, next.getShardId() + 1, next.getSuccessor().shardid + 1)) {
+        //logger.info("FindPredecessor for id="+Integer.toHexString(identifier)+" next_shardid="+Integer.toHexString(next.getShardId()));
+        while (!Util.withinInterval(identifier, next.getShardId()+1, next.getSuccessor().shardid+1)) {
             next = next.closestPrecedingFinger(identifier);
 //            logger.info("FindPredecessor for id="+Integer.toHexString(identifier)+" next_shardid="+Integer.toHexString(next.getShardId()));
         }
