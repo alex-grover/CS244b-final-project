@@ -137,7 +137,7 @@ public class ChordNode implements RemoteChordNodeI {
     	try {
     		predecessor = null;
     		fingerTable[0] = getChordNode(existingLocation).findSuccessor(getShardId()).getLocation();
-    		stabilizer = new Stabilizer(this);
+    		stabilizer = new Stabilizer();
     		stabilizer.start();
     	} catch (RemoteException e) {
     		logger.error("Failed to get successor", e);
@@ -149,10 +149,10 @@ public class ChordNode implements RemoteChordNodeI {
     public void stabilize() {
     	try {
     		Finger x = getChordNode(getSuccessor()).getPredecessor();
-
-    		if (x != null && Util.withinInterval(x.shardid, getShardId() + 1, getSuccessor().shardid)) {
+    		if (x != null &&
+                    Util.withinInterval(x.shardid, location.shardid+1, getSuccessor().shardid-1)) {
     			logger.info("Updating successor from "+Integer.toHexString(getSuccessor().shardid)+" to "+Integer.toHexString(x.shardid));
-    			fingerTable[0] = x;
+    		    fingerTable[0] = x;
     		}
     		RemoteChordNodeI remote = getChordNode(getSuccessor());
     		remote.notifyPredecessor(location);
@@ -164,8 +164,9 @@ public class ChordNode implements RemoteChordNodeI {
     /** Notify node of request to become predecessor */
     @Override
     public void notifyPredecessor(Finger newPredecessor) {
-    	if (predecessor == null || Util.withinInterval(newPredecessor.shardid, predecessor.shardid + 1, getShardId())) {
-    		logger.info("Updating predecessor to "+Integer.toHexString(newPredecessor.shardid));
+    	if (predecessor == null ||
+    	        Util.withinInterval(newPredecessor.shardid, predecessor.shardid+1, location.shardid-1)) {
+    	    logger.info("Updating predecessor to "+Integer.toHexString(newPredecessor.shardid));
     		predecessor = newPredecessor;
     	}
     }
@@ -193,7 +194,7 @@ public class ChordNode implements RemoteChordNodeI {
     public RemoteChordNodeI findPredecessor(int identifier) throws RemoteException {
         RemoteChordNodeI next = this;
         //logger.info("FindPredecessor for id="+Integer.toHexString(identifier)+" next_shardid="+Integer.toHexString(next.getShardId()));
-        while (!Util.withinInterval(identifier, next.getShardId()+1, next.getSuccessor().shardid+1)) {
+        while (!Util.withinInterval(identifier, next.getShardId()+1, next.getSuccessor().shardid)) {
             next = next.closestPrecedingFinger(identifier);
 //            logger.info("FindPredecessor for id="+Integer.toHexString(identifier)+" next_shardid="+Integer.toHexString(next.getShardId()));
         }
@@ -207,7 +208,7 @@ public class ChordNode implements RemoteChordNodeI {
         // lookup in finger tree 
         for (int index = NUM_FINGERS-1; index >= 0; index--) {
             try {
-                if (Util.withinInterval(fingerTable[index].shardid, location.shardid + 1, identifier)) {
+                if (Util.withinInterval(fingerTable[index].shardid, location.shardid+1, identifier-1)) {
                     return getChordNode(fingerTable[index]);
                 }
             } catch (RemoteException e) {
@@ -268,7 +269,7 @@ public class ChordNode implements RemoteChordNodeI {
     }
     
     public boolean ownsIdentifier(int identifier) {
-    	return Util.withinInterval(identifier, this.getShardId(), this.getSuccessor().shardid);
+    	return Util.withinInterval(identifier, this.getShardId(), this.getSuccessor().shardid-1);
     }
 
     /** Forward POST request to appropriate node */
@@ -320,4 +321,27 @@ public class ChordNode implements RemoteChordNodeI {
 	public boolean stable() {
 		return getSuccessor().shardid != location.shardid;
 	}
+    
+    public class Stabilizer extends Thread {
+        final static int SLEEP_MILLIS = 1000;
+        
+        /** Run stabilization and fix fingers for ChordNode */
+        public void run() {
+            try {
+                while (!Thread.currentThread().isInterrupted()) {
+                    stabilize();
+                    fixFingers();
+                    logger.info("Node "+Integer.toHexString(location.shardid)+" predecessor="+Integer.toHexString(predecessor.shardid)+" successor="+Integer.toHexString(fingerTable[0].shardid));
+                    Thread.sleep(SLEEP_MILLIS);
+                }
+            } catch (InterruptedException e) {
+                logger.info("Exiting...", e);
+            }
+        }
+        
+        /** Kill stabilization thread */
+        public void cancel() {
+            interrupt();
+        }
+    }
 }

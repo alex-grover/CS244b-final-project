@@ -29,16 +29,16 @@ public class Util {
         };
     }
     
-    /** Determine whether the identifier falls within the specified interval (start included,
-     *  end excluded) while taking wrapping into account, since identifiers are located on a ring *
+    /** Determine whether the identifier falls within the specified interval (both start and
+     *  end included) while taking wrapping into account, since identifiers are located on a ring *
      */
     public static boolean withinInterval(int identifier, int intervalStart, int intervalEnd) {
         if (intervalStart < intervalEnd) {
             // standard monotonically increasing case
-            return ((identifier >= intervalStart) && (identifier < intervalEnd));
+            return ((identifier >= intervalStart) && (identifier <= intervalEnd));
         } else {
             // wrap around case, also handles special case for single node which encompasses full ring
-            return ((identifier >= intervalStart) || (identifier < intervalEnd));
+            return ((identifier >= intervalStart) || (identifier <= intervalEnd));
         }
     }
     
