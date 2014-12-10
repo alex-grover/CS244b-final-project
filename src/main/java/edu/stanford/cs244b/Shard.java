@@ -42,6 +42,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.NoSuchProviderException;
 import java.security.Security;
+import java.security.SignatureException;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
@@ -257,50 +258,58 @@ public class Shard {
     @Path("/{itemId}")
     @ApiOperation("Retrieve an item from this shard, or return 404 Not Found if it does not exist")
     public Response getItem(@PathParam("itemId") String idString) throws DecoderException, IOException, NoSuchAlgorithmException, InvalidKeyException, NoSuchProviderException {
+        Map<String, Object> results = recordRequest();
+        // first attempt to get the original from uploader node's DATA_DIR
         java.nio.file.Path filePath = Paths.get(DATA_DIR, idString);
         if (Files.exists(filePath)) {
         	logger.info("File exists, fetching from local server");
             InputStream downloadInputStream = Files.newInputStream(filePath);
-            return processFile(downloadInputStream, idString);
-        } else {
-    		int identifier = Util.hexStringToIdentifier(idString);
-    		if (!node.ownsIdentifier(identifier)) {
-    			logger.info("File doesn't exist, forwarding request");
-    			byte[] res = node.forwardLookup(identifier, idString);
-    			
-    			if (res == null) {
-    				return Responses.notFound().build();
-    			}
-    			
-    			InputStream downloadInputStream = new ByteArrayInputStream(res);
-    			return processFile(downloadInputStream, idString);
-    		} else {
-    			return Responses.notFound().build();
-    		}
+            
+            try {
+                byte[] bytes = verifyFile(downloadInputStream, idString);
+                return Response.ok().entity(bytes).build();
+            } catch (SignatureException e) {
+                logger.info("request for "+idString+" does not match checksum");
+            }
+            
+        }
+        // TODO: ask each replica, not just the first one.
+        // ask for replicas to retrieve from REPLICA_DIR
+        int identifier = Util.hexStringToIdentifier(idString);
+        logger.info("File doesn't exist, forwarding request");
+        byte[] res = node.forwardLookup(identifier, idString);
+        if (res == null) {
+            return Responses.notFound().build();
+        }
+
+        InputStream downloadInputStream = new ByteArrayInputStream(res);
+        try {
+            byte[] bytes = verifyFile(downloadInputStream, idString);
+            return Response.ok().entity(bytes).build();
+        } catch (SignatureException e) {
+            return Responses.notFound().build();
         }
     }
     
     public byte[] getItemAsByteArray(String idString) throws DecoderException, IOException, NoSuchAlgorithmException, InvalidKeyException, NoSuchProviderException {
-        java.nio.file.Path filePath = Paths.get(DATA_DIR, idString);
+        java.nio.file.Path filePath = Paths.get(REPLICA_DIR, idString);
         if (Files.exists(filePath)) {
-        	logger.info("Getting file for remote server as byte[]");
-            InputStream downloadInputStream = Files.newInputStream(filePath);
-            return IOUtils.toByteArray(downloadInputStream);
+        	logger.info("Getting file for remote server as byte[] "+idString);
+        	return Files.readAllBytes(filePath);
         } 
         return null;
     }
     
-    public Response processFile(InputStream downloadInputStream, String idString) throws InvalidKeyException, NoSuchAlgorithmException, NoSuchProviderException, IOException {
+    /** Ensure that the retrieved file has not been tampered with by verifying checksum 
+     * @throws SignatureException */ 
+    public byte[] verifyFile(InputStream downloadInputStream, String idString) throws InvalidKeyException, NoSuchAlgorithmException, NoSuchProviderException, IOException, SignatureException {
     	byte[] digest = null;
-    	Map<String, Object> results = recordRequest();
     	MessageDigest sha256 = MessageDigest.getInstance("SHA-256");
     	// by default, just copy directly from file for IdentifierAlgorithm.SHA256_NOVERIFY
         InputStream wrappedInputStream = downloadInputStream;
-        if (identifierAlgo.equals(IdentifierAlgorithm.SHA256_NOVERIFY)) {
-            return Response.ok().entity(downloadInputStream).build();
-        } else if (identifierAlgo.equals(IdentifierAlgorithm.HMAC_SHA256)) {
+        if (identifierAlgo.equals(IdentifierAlgorithm.HMAC_SHA256)) {
             wrappedInputStream = new HMACInputStream(downloadInputStream, secretKey);
-        } else if (identifierAlgo.equals(IdentifierAlgorithm.SHA256)) {
+        } else {
             wrappedInputStream = new DigestInputStream(downloadInputStream, sha256);
         }
         
@@ -309,18 +318,14 @@ public class Shard {
         
         if (identifierAlgo.equals(IdentifierAlgorithm.HMAC_SHA256)){
             digest = ((HMACInputStream) wrappedInputStream).getDigest();     
-        } else if (identifierAlgo.equals(IdentifierAlgorithm.SHA256)) {
+        } else {
             digest = sha256.digest();
         }
         
         if (digest != null && !idString.equalsIgnoreCase(Hex.encodeHexString(digest))) {
-            results.put("error", "request for "+idString+" does not match computed checksum "+Hex.encodeHexString(digest));
-            return Response.status(Response.Status.GONE).
-                type(MediaType.APPLICATION_JSON_TYPE).
-                entity(results).build();
-        } else {
-            return Response.ok().entity(bytes).build();
+            throw new SignatureException("File "+idString+" has invalid "+identifierAlgo.toString()+"checksum "+Hex.encodeHexString(digest));
         }
+        return bytes;
     }
     
     public SecretKeySpec readOrCreateSecretKey() throws NoSuchAlgorithmException {
