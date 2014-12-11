@@ -12,6 +12,7 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
+import javax.ws.rs.core.Response.ResponseBuilder;
 
 import org.apache.commons.codec.DecoderException;
 import org.apache.commons.codec.binary.Hex;
@@ -93,7 +94,8 @@ public class Shard {
     
     // https://stackoverflow.com/questions/5318132/is-it-possible-to-control-the-filename-for-a-response-from-a-jersey-rest-service
     public class MetadataEntry {
-        protected FormDataContentDisposition fileDetail;
+        protected String fileName;
+        protected MediaType fileType;
         protected String userChecksum;
         protected String sha256;
         
@@ -102,8 +104,9 @@ public class Shard {
             this.sha256 = sha256;
         }
         
-        public void setFileDetail(FormDataContentDisposition fileDetail) {
-            this.fileDetail = fileDetail;
+        public void setFileDetail(String fileName, MediaType fileType) {
+            this.fileName = fileName;
+            this.fileType = fileType;
         }
     }
     
@@ -196,18 +199,15 @@ public class Shard {
     @Produces(MediaType.APPLICATION_JSON)
     @ApiOperation("Insert a new item into the distributed hash table")
     public Map<String,Object> insertItem(@FormDataParam("file") final InputStream uploadInputStream,
-            @FormDataParam("file") final FormDataContentDisposition fileDetail,
             @FormDataParam("file") final FormDataBodyPart fileBody) throws NoSuchAlgorithmException, IOException, InvalidKeyException, NoSuchProviderException {
         final MetadataEntry meta = saveFile(uploadInputStream, identifierAlgo);
-        meta.setFileDetail(fileDetail);
+        meta.setFileDetail(fileBody.getFormDataContentDisposition().getFileName(), fileBody.getMediaType());
         fileMetadata.put(meta.userChecksum, meta);
-
         return new HashMap<String,Object>() {{
             put("shard", shardIdAsHex());
             put("id", meta.userChecksum);
-            put("filename", meta.fileDetail.getFileName());
-            put("filetype", meta.fileDetail.getType());
-            put("filesize", meta.fileDetail.getSize());
+            put("filename", meta.fileName);
+            put("filetype", meta.fileType.toString());
         }};
     }
     
@@ -288,13 +288,9 @@ public class Shard {
     public Response getItem(@PathParam("itemId") String idString) throws DecoderException, IOException, NoSuchAlgorithmException, InvalidKeyException, NoSuchProviderException {
         Map<String, Object> results = recordRequest();
         
-        
-         
-        
         MetadataEntry meta = fileMetadata.get(idString);
-        ContentDisposition contentDisposition = ((meta != null) ? meta.fileDetail :
-            ContentDisposition.type("attachment").fileName(idString).creationDate(new Date()).build());
-        
+        ContentDisposition contentDisposition = ContentDisposition.type("attachment").
+                fileName((meta != null) ? meta.fileName : idString).build();
         
         // first attempt to get the original from uploader node's DATA_DIR
         java.nio.file.Path filePath = Paths.get(DATA_DIR, idString);
@@ -304,7 +300,11 @@ public class Shard {
             
             try {
                 byte[] bytes = verifyFile(downloadInputStream, idString);
-                return Response.ok().entity(bytes).header("Content-Disposition", contentDisposition).build();
+                ResponseBuilder rb = Response.ok().entity(bytes).header("Content-Disposition", contentDisposition);
+                if (meta != null) {
+                    rb.type(meta.fileType);
+                }
+                return rb.build();
             } catch (SignatureException e) {
                 logger.info("request for "+idString+" does not match checksum");
             }
@@ -315,7 +315,11 @@ public class Shard {
         logger.info("File doesn't exist or is corrupted, forwarding request");
         try {
             byte[] verifiedOutput = node.forwardLookup(identifier, idString);
-            return Response.ok().entity(verifiedOutput).header("Content-Disposition", contentDisposition).build();
+            ResponseBuilder rb = Response.ok().entity(verifiedOutput).header("Content-Disposition", contentDisposition);
+            if (meta != null) {
+                rb.type(meta.fileType);
+            }
+            return rb.build();
         } catch (RemoteException e) {
             return Responses.notFound().build();
         } catch (SignatureException e) {
