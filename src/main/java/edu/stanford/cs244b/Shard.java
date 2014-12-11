@@ -184,6 +184,7 @@ public class Shard {
         return new HashMap<String, Object>() {{
             put("shard", shardIdAsHex());
             put("files", fileMetadata.values());
+            put("fingers", node.getFingerTable());
         }};
     }
     

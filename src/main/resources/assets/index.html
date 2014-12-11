@@ -28,13 +28,23 @@
                     </div>
                 </form>
             </div>
-            <p><strong>Page:</strong> {{tableParams.page()}}</p>
-            <table ng-table="tableParams" class="table">
+            <p><strong>Items</strong></p>
+            <table ng-table="fileTableParams" class="table">
                 <tr ng-repeat="file in meta.files">
                     <td data-title="'File Name'"><a href="/api/shard/{{file.userChecksum}}">{{file.fileName}}</a></td>
                     <td data-title="'File Type'">{{file.fileType}}</td>
                     <td data-title="'User Checksum'"><kbd>{{file.userChecksum}}</kbd></td>
                     <td data-title="'SHA256 Hash'"><kbd>{{file.sha256}}</kbd></td>
+                </tr>
+            </table>
+            <p><strong>Fingers</p>
+            <table ng-table="fingerTableParams" class="table">
+                <tr ng-repeat="finger in meta.fingers">
+                    <td data-title="'FingerIndex'">{{$index}}</td>
+                    <td data-title="'ShardId'"><a href="http://localhost:{{finger.port-1}}">{{finger.shardId}}</a></td>
+                    <td data-title="'Host'">{{finger.host}}</td>
+                    <!-- Port stored by ChordNode is RMI port; Shard webserver port is 1 lower -->
+                    <td data-title="'Port'">{{finger.port-1}}</td>
                 </tr>
             </table>
         </div>
