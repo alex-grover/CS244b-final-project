@@ -325,7 +325,7 @@ public class ChordNode implements RemoteChordNodeI {
     			RemoteChordNodeI p = findPredecessor(fingerValue);
     			p.removeNode(this, i, getSuccessor());
     		} catch (RemoteException e) {
-    			logger.error("Failed to notify predecessor or node leaving", e);
+    			logger.error("Failed to notify predecessor of node leaving", e);
     		}
     		
     	}
