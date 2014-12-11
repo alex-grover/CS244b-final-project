@@ -2,7 +2,10 @@
 <html>
     <head>
         <link rel="stylesheet" href="css/bootstrap-3.0.0.min.css" />
-        <script type="text/javascript" src="js/angular-1.3.5.js"></script>
+        <link rel="stylesheet" href="css/ng-table-0.3.0.css" />
+
+        <script type="text/javascript" src="js/angular-1.2.27.js"></script>
+        <script type="text/javascript" src="js/ng-table-0.3.0.js"></script>
         <script type="text/javascript" src="js/shard.js"></script>
     </head> 
     <body ng-app="main">
@@ -21,6 +24,15 @@
                     </div>
                 </form>
             </div>
+            <p><strong>Page:</strong> {{tableParams.page()}}</p>
+            <table ng-table="tableParams" class="table">
+                <tr ng-repeat="file in meta.files">
+                    <td data-title="'File Name'">{{file.fileName}}</td>
+                    <td data-title="'File Type'">{{file.fileType}}</td>
+                    <td data-title="'User Checksum'">{{file.userChecksum}}</td>
+                    <td data-title="'SHA256 Hash'">{{file.sha256}}</td>
+                </tr>
+            </table>
         </div>
     </body>
 </html>
