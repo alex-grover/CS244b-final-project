@@ -283,7 +283,11 @@ public class ChordNode implements RemoteChordNodeI {
 	    	int i = rgen.nextInt(NUM_FINGERS - 1) + 1;
 	    	int idToFind = computeIdToFind(i);
 	    	Finger f = findSuccessor(idToFind).getLocation();
-	    	logger.info("Updating fingerTable[" + i + "] from "+ Integer.toHexString(fingerTable[i].shardid) + " to " + Integer.toHexString(f.shardid));
+	    	String oldFingerShardId = fingerTable[i] != null ? Integer.toHexString(fingerTable[i].shardid) : "null";
+	    	String newFingerShardId = f != null ? Integer.toHexString(f.shardid) : "null";
+	    	if (!oldFingerShardId.equals(newFingerShardId)) {
+	    	    logger.info("Updating fingerTable[" + i + "] from "+ oldFingerShardId + " to " + newFingerShardId);
+	    	}
 	    	fingerTable[i] = f;
     	} catch (RemoteException e) {
     		// Predecessor's successor is unreachable, wait until its finger table gets fixed
