@@ -213,6 +213,12 @@ public class ChordNode implements RemoteChordNodeI {
     	
 		stabilizer = new Stabilizer();
 		stabilizer.start();
+        Runtime.getRuntime().addShutdownHook(new Thread() {
+            @Override
+            public void run() {
+                stabilizer.cancel();
+            }
+        });
 		return true;
     }
     
@@ -543,6 +549,7 @@ public class ChordNode implements RemoteChordNodeI {
         /** Kill stabilization thread */
         public void cancel() {
             interrupt();
+            leave(0);
         }
     }
 }
