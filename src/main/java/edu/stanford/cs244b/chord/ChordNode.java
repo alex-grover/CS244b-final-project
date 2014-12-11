@@ -45,6 +45,11 @@ public class ChordNode implements RemoteChordNodeI {
      *  counterclockwise around the identifier circle */
     protected Finger predecessor;
     
+    /** Whether to randomly update fingers or perform linear scan */
+    protected boolean randomFingerUpdate = false;
+    
+    protected int fingerIndexToUpdate = 0;
+    
     final static int NUM_FINGERS = 32;
     
     /** In initial Chord implementation, only maintain a pointer to
@@ -279,16 +284,21 @@ public class ChordNode implements RemoteChordNodeI {
     /** Choose a random node and update finger table */
     public void fixFingers() {
     	try {
-	    	Random rgen = new Random();
-	    	int i = rgen.nextInt(NUM_FINGERS - 1) + 1;
-	    	int idToFind = computeIdToFind(i);
+    	    if (randomFingerUpdate) {
+	    	    Random rgen = new Random();
+	    	    fingerIndexToUpdate = rgen.nextInt(NUM_FINGERS - 1) + 1;
+    	    } else {
+    	        // sequentially scan 1 to NUM_FINGERS-1
+    	        fingerIndexToUpdate = (fingerIndexToUpdate >= NUM_FINGERS-1) ? 1 : (fingerIndexToUpdate+1);    
+    	    }
+	    	int idToFind = computeIdToFind(fingerIndexToUpdate);
 	    	Finger f = findSuccessor(idToFind).getLocation();
-	    	String oldFingerShardId = fingerTable[i] != null ? Integer.toHexString(fingerTable[i].shardid) : "null";
+	    	String oldFingerShardId = fingerTable[fingerIndexToUpdate] != null ? Integer.toHexString(fingerTable[fingerIndexToUpdate].shardid) : "null";
 	    	String newFingerShardId = f != null ? Integer.toHexString(f.shardid) : "null";
 	    	if (!oldFingerShardId.equals(newFingerShardId)) {
-	    	    logger.info("Updating fingerTable[" + i + "] from "+ oldFingerShardId + " to " + newFingerShardId);
+	    	    logger.info("Updating fingerTable[" + fingerIndexToUpdate + "] from "+ oldFingerShardId + " to " + newFingerShardId);
 	    	}
-	    	fingerTable[i] = f;
+	    	fingerTable[fingerIndexToUpdate] = f;
     	} catch (RemoteException e) {
     		// Predecessor's successor is unreachable, wait until its finger table gets fixed
     		logger.error("Failed to update finger table");
