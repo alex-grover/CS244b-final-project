@@ -28,7 +28,7 @@
                     </div>
                 </form>
             </div>
-            <p><strong>Items</strong></p>
+            <p><strong>User Items</strong></p>
             <table ng-table="fileTableParams" class="table">
                 <tr ng-repeat="file in meta.files">
                     <td data-title="'File Name'"><a href="/api/shard/{{file.userChecksum}}">{{file.fileName}}</a></td>

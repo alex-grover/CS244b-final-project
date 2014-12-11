@@ -1,5 +1,5 @@
 var app = angular.module('main', ['ngTable']).
-  controller('ShardCtrl', function($scope, $http, ngTableParams) {
+  controller('ShardCtrl', function($scope, $http, $interval, ngTableParams) {
     $scope.meta = {'shard': '(unknown shardid)',
                    'files': [],
                    'fingers': []};
@@ -30,5 +30,5 @@ var app = angular.module('main', ['ngTable']).
         });
     };
 
-    $scope.refresh();
+    $interval($scope.refresh, 1000);
 });
