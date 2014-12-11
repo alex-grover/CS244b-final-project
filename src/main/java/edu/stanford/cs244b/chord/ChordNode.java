@@ -112,7 +112,7 @@ public class ChordNode implements RemoteChordNodeI {
             Finger nodeLocation = chordNode.getLocation(); // verify that we can contact ChordNode at specified location
             return chordNode;
         } catch (Exception e) {
-            logger.error("Failed to get remote ChordNode at location "+remoteLocation, e);
+//            logger.error("Failed to get remote ChordNode at location "+remoteLocation, e);
             throw new RemoteException("Failed to get remote ChordNode at location "+remoteLocation);
         }
     }
@@ -225,6 +225,11 @@ public class ChordNode implements RemoteChordNodeI {
     		x = successor.getPredecessor();
     	} catch (RemoteException e) {
     		updateSuccessor();
+    		try {
+				successor = getChordNode(getSuccessor());
+			} catch (RemoteException e1) {
+				e1.printStackTrace();
+			}
     	}
     	
 		if (x != null && Util.withinInterval(x.shardid, location.shardid+1, getSuccessor().shardid-1)) {
@@ -239,7 +244,7 @@ public class ChordNode implements RemoteChordNodeI {
 		}
 		
 		try {
-			successor.notifyPredecessor(location);
+			if (successor != null) successor.notifyPredecessor(location);
 		} catch (RemoteException e) {
 			updateSuccessor();
 		}
@@ -260,12 +265,14 @@ public class ChordNode implements RemoteChordNodeI {
     public void fixFingers() {
     	try {
 	    	Random rgen = new Random();
-	    	int i = rgen.nextInt(NUM_FINGERS - 1) + 1; // TODO: use power of 2 here
-	    	Finger f = findSuccessor(fingerTable[i].shardid).getLocation();
-//	    	logger.info("Updating fingerTable[" + i + "] from "+ fingerTable[i] + " to " + f);
+	    	int i = rgen.nextInt(NUM_FINGERS - 1) + 1;
+	    	int idToFind = (location.shardid + (1 << (i - 1))) % (1 << NUM_FINGERS);
+	    	Finger f = findSuccessor(idToFind).getLocation();
+	    	logger.info("Updating fingerTable[" + i + "] from "+ Integer.toHexString(fingerTable[i].shardid) + " to " + Integer.toHexString(f.shardid));
 	    	fingerTable[i] = f;
     	} catch (RemoteException e) {
-    		logger.error("Failed to update finger table", e);
+    		// Predecessor's successor is unreachable, wait until its finger table gets fixed
+    		logger.error("Failed to update finger table");
     	}
     }
     
@@ -289,17 +296,16 @@ public class ChordNode implements RemoteChordNodeI {
     
     @Override
     public RemoteChordNodeI closestPrecedingFinger(int identifier) {
-        
         // lookup in finger tree 
         for (int index = NUM_FINGERS-1; index >= 0; index--) {
-            try {
-                if (Util.withinInterval(fingerTable[index].shardid, location.shardid+1, identifier-1)) {
-                    return getChordNode(fingerTable[index]);
-                }
-            } catch (RemoteException e) {
-                logger.error("closestPrecedingFinger failed to lookup finger", e);
-                // TODO: howto deal with lookup failure until fixFingers runs?
-            }
+	        if (Util.withinInterval(fingerTable[index].shardid, location.shardid+1, identifier-1)) {
+	        	try {
+	        		return getChordNode(fingerTable[index]);
+	        	} catch (RemoteException e) {
+	        		// TODO: finger is invalid...
+	        		continue;
+	        	}
+	        }
         }
         return this;
     }
@@ -513,7 +519,7 @@ public class ChordNode implements RemoteChordNodeI {
 			logger.info("Successfully recovered from successor failure");
 		} else {
 			logger.error("All successors are unreachable. Exiting...");
-			leave(1);
+//			leave(1);
 		}
 	}
     
