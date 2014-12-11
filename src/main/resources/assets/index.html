@@ -1,18 +1,26 @@
 <!DOCTYPE html>
 <html>
-    <body>
-        <form method="post" enctype="multipart/form-data" action="/api/shard">
-            <div>
-                <label for="caption">Image Description</label>
-                <input name="caption" type="text" />
+    <head>
+        <link rel="stylesheet" href="css/bootstrap-3.0.0.min.css" />
+        <script type="text/javascript" src="js/angular-1.3.5.js"></script>
+        <script type="text/javascript" src="js/shard.js"></script>
+    </head> 
+    <body ng-app="main">
+        <div class="container" ng-controller="ShardCtrl">
+            <div class="jumbotron">
+                <h2>Shard Admin {{meta.shard}}</h2>
+                <p>This page lets you upload content to your local "shard" instance of the replicated Chord file locker.</p>
+                <form method="post" enctype="multipart/form-data" action="/api/shard">
+                    <div>
+                        <label for="file">Image File</label>
+                        <input name="file" type="file" />
+                    </div>
+                    <div>
+                        <input type="submit" value="Submit" class="btn btn-success"/>
+                        <input type="button" value="Refresh" ng-click="refresh()" class="btn btn-primary"/>
+                    </div>
+                </form>
             </div>
-            <div>
-                <label for="file">Image File</label>
-                <input name="file" type="file" />
-            </div>
-            <div>
-                <input type="submit" value="Submit" />
-            </div>
-        </form>
+        </div>
     </body>
 </html>
