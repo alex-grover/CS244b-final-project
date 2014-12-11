@@ -1,6 +1,7 @@
 package edu.stanford.cs244b.chord;
 
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.net.InetAddress;
 import java.rmi.Naming;
@@ -8,12 +9,20 @@ import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
+import java.security.InvalidKeyException;
+import java.security.NoSuchAlgorithmException;
+import java.security.NoSuchProviderException;
+import java.security.SignatureException;
 import java.util.HashSet;
 import java.util.Random;
 import java.util.Set;
 
+import javax.ws.rs.core.Response;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.sun.jersey.api.Responses;
 
 import edu.stanford.cs244b.Shard;
 import edu.stanford.cs244b.Shard.IdentifierAlgorithm;
@@ -45,7 +54,7 @@ public class ChordNode implements RemoteChordNodeI {
     
     /** Each file is sent to REPLICATION_FACTOR nodes in
      *  addition to the origin node. */
-    final static int REPLICATION_FACTOR = 1;
+    final static int REPLICATION_FACTOR = 2;
     
     /** List of successors to check in case of failure */
     protected Finger[] successorList = new Finger[REPLICATION_FACTOR];
@@ -329,17 +338,57 @@ public class ChordNode implements RemoteChordNodeI {
     	return Util.withinInterval(identifier, this.getShardId(), this.getSuccessor().shardid-1);
     }
 		
-	/** Look up file on remote node */
-	public byte[] forwardLookup(int identifier, String hash) {
-	    //for (int index = 0; index < REPLICATION_FACTOR; index++) {
-		try {
-			RemoteChordNodeI node = getChordNode(findPredecessor(identifier).getLocation());
-			return node.getFile(hash);
-		} catch (RemoteException e) {
-			logger.error("Error looking up file on remote node", e);
-			return null;
-		}
-	    //}
+	/** Look up file on remote replica node, keep looking at successors for replica 
+	 * @throws RemoteException 
+	 * @throws SignatureException */
+	public byte[] forwardLookup(int identifier, String hash) throws RemoteException, SignatureException, IOException {
+	    int numTries = REPLICATION_FACTOR;
+	    RemoteChordNodeI replica = null;
+	    while (numTries > 0) {
+	        try {
+	            numTries--;
+	            if (replica == null) {
+	                // replica from previous iteration was dead, try looking it up again
+                    replica = getChordNode(findPredecessor(identifier).getLocation());
+	            } else {
+	                // replica from previous iteration returned corrupt data, try its successor
+                    replica = getChordNode(replica.getSuccessor());
+	            }
+	            int shardId = replica.getShardId(); // will throw remoteException if this fails
+	            byte[] retrievedData = replica.getFile(hash);
+	            if (retrievedData == null) {
+	                logger.error("Replica "+Integer.toHexString(shardId)+" does not have copy of file "+hash);
+	                continue;
+	            }
+
+	            InputStream downloadInputStream = new ByteArrayInputStream(retrievedData);
+	            byte[] verifiedBytes;
+                verifiedBytes = shard.verifyFile(downloadInputStream, hash);
+	            return verifiedBytes;
+	        } catch (RemoteException e) {
+	            logger.error("Error looking up remote node", e);
+	            if (numTries <= 0) {
+	                throw e;
+	            } else {
+	                // reset replica, try again after waiting for stabilize to complete
+	                replica = null;
+	                try {
+                        Thread.sleep(Stabilizer.SLEEP_MILLIS + Stabilizer.SLEEP_MILLIS);
+                    } catch (InterruptedException e1) {
+                        logger.error("Thread sleep failed", e);
+                    }
+	            }
+	        } catch (SignatureException | IOException e) {
+	            logger.error("Signature mismatch", e.getLocalizedMessage());
+	            if (numTries <= 0) {
+	                throw e;
+	            } // try successor replica in next iteration 
+	        } catch (InvalidKeyException | NoSuchAlgorithmException
+                    | NoSuchProviderException e) {
+                logger.error("Failure on uploader user's local node", e);
+            }
+	    }
+	    throw new RemoteException("Cannot retrieve file from replicas");
 	}
 
 	/** Remote method to return item if contained on this server */

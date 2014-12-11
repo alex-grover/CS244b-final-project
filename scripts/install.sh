@@ -3,6 +3,7 @@
 echo 'Killing existing java processes on machine' $1
 sudo killall java
 sleep 2
+rm -rf temp-* data-*
 
 echo 'Starting server on machine' $1
 let debugport=10000+$1

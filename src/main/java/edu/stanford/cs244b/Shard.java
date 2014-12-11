@@ -36,6 +36,7 @@ import java.net.UnknownHostException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.rmi.RemoteException;
 import java.security.DigestInputStream;
 import java.security.InvalidKeyException;
 import java.security.MessageDigest;
@@ -276,28 +277,30 @@ public class Shard {
         // TODO: ask each replica, not just the first one.
         // ask for replicas to retrieve from REPLICA_DIR
         int identifier = Util.hexStringToIdentifier(idString);
-        logger.info("File doesn't exist, forwarding request");
-        byte[] res = node.forwardLookup(identifier, idString);
-        if (res == null) {
-            return Responses.notFound().build();
-        }
-
-        InputStream downloadInputStream = new ByteArrayInputStream(res);
+        logger.info("File doesn't exist or is corrupted, forwarding request");
         try {
-            byte[] bytes = verifyFile(downloadInputStream, idString);
-            return Response.ok().entity(bytes).build();
-        } catch (SignatureException e) {
+            byte[] verifiedOutput = node.forwardLookup(identifier, idString);
+            return Response.ok().entity(verifiedOutput).build();
+        } catch (RemoteException e) {
             return Responses.notFound().build();
+        } catch (SignatureException e) {
+            results.put("error", e.toString());
+            return Response.status(Response.Status.GONE).
+                type(MediaType.APPLICATION_JSON_TYPE).
+                entity(results).build();
         }
     }
     
     public byte[] getItemAsByteArray(String idString) throws DecoderException, IOException, NoSuchAlgorithmException, InvalidKeyException, NoSuchProviderException {
         java.nio.file.Path filePath = Paths.get(REPLICA_DIR, idString);
         if (Files.exists(filePath)) {
-        	logger.info("Getting file for remote server as byte[] "+idString);
+        	logger.info("Retrieving file for remote server as byte[] "+idString);
         	return Files.readAllBytes(filePath);
-        } 
-        return null;
+        } else {
+            // null indicates file not available
+            logger.info("Replica "+shardId+" does not have copy of requested file "+idString);
+            return null;
+        }
     }
     
     /** Ensure that the retrieved file has not been tampered with by verifying checksum 
@@ -323,7 +326,7 @@ public class Shard {
         }
         
         if (digest != null && !idString.equalsIgnoreCase(Hex.encodeHexString(digest))) {
-            throw new SignatureException("File "+idString+" has invalid "+identifierAlgo.toString()+"checksum "+Hex.encodeHexString(digest));
+            throw new SignatureException("File "+idString+" has invalid "+identifierAlgo.toString()+" checksum "+Hex.encodeHexString(digest));
         }
         return bytes;
     }
