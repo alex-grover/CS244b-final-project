@@ -214,11 +214,11 @@ public class ChordNode implements RemoteChordNodeI {
 		stabilizer = new Stabilizer();
 		stabilizer.start();
         Runtime.getRuntime().addShutdownHook(new Thread() {
-            @Override
-            public void run() {
-                stabilizer.cancel();
-            }
-        });
+			@Override
+			public void run() {
+				stabilizer.cancel();
+			}
+		});
 		return true;
     }
     
@@ -266,13 +266,22 @@ public class ChordNode implements RemoteChordNodeI {
     		predecessor = newPredecessor;
     	}
     }
+
+	/** Compute identifier of finger at given index, taking signed integer wrapping into account */
+	protected int computeIdToFind(int fingerIndex) {
+		// convert to unsigned long
+		long unsignedShardId = ((long) location.shardid)-Integer.MIN_VALUE;
+		long idToFind = (unsignedShardId + (1l << (fingerIndex - 1l))) % (1l << NUM_FINGERS);
+		// convert back to signed integer
+		return (int) (idToFind+Integer.MIN_VALUE);
+	}
     
     /** Choose a random node and update finger table */
     public void fixFingers() {
     	try {
 	    	Random rgen = new Random();
 	    	int i = rgen.nextInt(NUM_FINGERS - 1) + 1;
-	    	int idToFind = (location.shardid + (1 << (i - 1))) % (1 << NUM_FINGERS);
+	    	int idToFind = computeIdToFind(i);
 	    	Finger f = findSuccessor(idToFind).getLocation();
 	    	logger.info("Updating fingerTable[" + i + "] from "+ Integer.toHexString(fingerTable[i].shardid) + " to " + Integer.toHexString(f.shardid));
 	    	fingerTable[i] = f;
