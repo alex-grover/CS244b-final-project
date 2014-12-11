@@ -434,7 +434,7 @@ public class ChordNode implements RemoteChordNodeI {
     public void beginReplicatingFile(int identifier, byte[] data) {
         try {
             if (REPLICATION_FACTOR > 0) {
-                getChordNode(findPredecessor(identifier).getLocation()).replicateFile(data, REPLICATION_FACTOR);
+                getChordNode(findPredecessor(identifier).getLocation()).replicateFile(data, REPLICATION_FACTOR-1);
             }
         } catch (RemoteException e) {
             logger.error("Failed to replicate file", e);
