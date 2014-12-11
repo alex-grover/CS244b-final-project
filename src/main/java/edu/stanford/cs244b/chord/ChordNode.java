@@ -100,7 +100,7 @@ public class ChordNode implements RemoteChordNodeI {
             String rmiURL = remoteLocation.getRMIUrl();
             
             RemoteChordNodeI chordNode = (RemoteChordNodeI) Naming.lookup(rmiURL);
-            // Finger nodeLocation = chordNode.getLocation(); // verify that we can contact ChordNode at specified location
+            Finger nodeLocation = chordNode.getLocation(); // verify that we can contact ChordNode at specified location
             return chordNode;
         } catch (Exception e) {
             logger.error("Failed to get remote ChordNode at location "+remoteLocation, e);
@@ -241,7 +241,8 @@ public class ChordNode implements RemoteChordNodeI {
     public void notifyPredecessor(Finger newPredecessor) {
     	if (predecessor == null ||
     	        Util.withinInterval(newPredecessor.shardid, predecessor.shardid+1, location.shardid-1)) {
-    	    logger.info("Updating predecessor to "+Integer.toHexString(newPredecessor.shardid));
+    	    String oldPredecessor = (predecessor == null ? "null" : Integer.toHexString(predecessor.shardid));
+    	    logger.info("Updating predecessor from "+oldPredecessor+" to "+Integer.toHexString(newPredecessor.shardid));
     		predecessor = newPredecessor;
     	}
     }
@@ -351,6 +352,7 @@ public class ChordNode implements RemoteChordNodeI {
 		
 	/** Look up file on remote node */
 	public byte[] forwardLookup(int identifier, String hash) {
+	    //for (int index = 0; index < REPLICATION_FACTOR; index++) {
 		try {
 			RemoteChordNodeI node = getChordNode(findPredecessor(identifier).getLocation());
 			return node.getFile(hash);
@@ -358,6 +360,7 @@ public class ChordNode implements RemoteChordNodeI {
 			logger.error("Error looking up file on remote node", e);
 			return null;
 		}
+	    //}
 	}
 
 	/** Remote method to return item if contained on this server */
