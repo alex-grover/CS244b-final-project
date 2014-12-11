@@ -180,8 +180,11 @@ public class Shard {
     @Produces(MediaType.APPLICATION_JSON)
     @Path("/meta")
     @ApiOperation("Retrieve metadata for all items uploaded to this shard")
-    public HashMap<String, MetadataEntry> getMetadata() {
-        return new HashMap<String, MetadataEntry>(fileMetadata);
+    public HashMap<String, Object> getMetadata() {
+        return new HashMap<String, Object>() {{
+            put("shard", shardIdAsHex());
+            put("files", fileMetadata.values());
+        }};
     }
     
     
