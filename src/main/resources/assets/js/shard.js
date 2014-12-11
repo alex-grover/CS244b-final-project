@@ -18,4 +18,6 @@ var app = angular.module('main', ['ngTable']).
             $scope.meta = data;
         });
     };
+
+    $scope.refresh();
 });

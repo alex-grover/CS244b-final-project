@@ -1,6 +1,13 @@
 <!DOCTYPE html>
 <html>
     <head>
+        <style>
+            @media (min-width: 1200px) {
+                .container {
+                    min-width: 1400px;
+                }
+            }
+        </style>
         <link rel="stylesheet" href="css/bootstrap-3.0.0.min.css" />
         <link rel="stylesheet" href="css/ng-table-0.3.0.css" />
 
@@ -14,10 +21,7 @@
                 <h2>Shard Admin {{meta.shard}}</h2>
                 <p>This page lets you upload content to your local "shard" instance of the replicated Chord file locker.</p>
                 <form method="post" enctype="multipart/form-data" action="/api/shard">
-                    <div>
-                        <label for="file">Image File</label>
-                        <input name="file" type="file" />
-                    </div>
+                    <input name="file" type="file" ng-model="meta.upload" ng-required="!meta.upload"/>
                     <div>
                         <input type="submit" value="Submit" class="btn btn-success"/>
                         <input type="button" value="Refresh" ng-click="refresh()" class="btn btn-primary"/>
@@ -27,10 +31,10 @@
             <p><strong>Page:</strong> {{tableParams.page()}}</p>
             <table ng-table="tableParams" class="table">
                 <tr ng-repeat="file in meta.files">
-                    <td data-title="'File Name'">{{file.fileName}}</td>
+                    <td data-title="'File Name'"><a href="/api/shard/{{file.userChecksum}}">{{file.fileName}}</a></td>
                     <td data-title="'File Type'">{{file.fileType}}</td>
-                    <td data-title="'User Checksum'">{{file.userChecksum}}</td>
-                    <td data-title="'SHA256 Hash'">{{file.sha256}}</td>
+                    <td data-title="'User Checksum'"><kbd>{{file.userChecksum}}</kbd></td>
+                    <td data-title="'SHA256 Hash'"><kbd>{{file.sha256}}</kbd></td>
                 </tr>
             </table>
         </div>
