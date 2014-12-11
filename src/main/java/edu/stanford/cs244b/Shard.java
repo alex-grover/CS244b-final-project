@@ -24,6 +24,7 @@ import com.codahale.metrics.annotation.Timed;
 import com.sun.jersey.api.Responses;
 import com.sun.jersey.core.header.ContentDisposition;
 import com.sun.jersey.core.header.FormDataContentDisposition;
+import com.sun.jersey.multipart.FormDataBodyPart;
 import com.sun.jersey.multipart.FormDataParam;
 import com.wordnik.swagger.annotations.Api;
 import com.wordnik.swagger.annotations.ApiOperation;
@@ -50,6 +51,7 @@ import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -194,12 +196,12 @@ public class Shard {
     @Produces(MediaType.APPLICATION_JSON)
     @ApiOperation("Insert a new item into the distributed hash table")
     public Map<String,Object> insertItem(@FormDataParam("file") final InputStream uploadInputStream,
-            final @FormDataParam("file") FormDataContentDisposition fileDetail) throws NoSuchAlgorithmException, IOException, InvalidKeyException, NoSuchProviderException {
+            @FormDataParam("file") final FormDataContentDisposition fileDetail,
+            @FormDataParam("file") final FormDataBodyPart fileBody) throws NoSuchAlgorithmException, IOException, InvalidKeyException, NoSuchProviderException {
         final MetadataEntry meta = saveFile(uploadInputStream, identifierAlgo);
         meta.setFileDetail(fileDetail);
         fileMetadata.put(meta.userChecksum, meta);
-        fileDetail.getFileName();
-        fileDetail.getType();
+
         return new HashMap<String,Object>() {{
             put("shard", shardIdAsHex());
             put("id", meta.userChecksum);
@@ -281,11 +283,19 @@ public class Shard {
      * @throws InvalidKeyException */
     @GET
     @Timed
-    @Produces(MediaType.APPLICATION_OCTET_STREAM)
     @Path("/{itemId}")
     @ApiOperation("Retrieve an item from this shard, or return 404 Not Found if it does not exist")
     public Response getItem(@PathParam("itemId") String idString) throws DecoderException, IOException, NoSuchAlgorithmException, InvalidKeyException, NoSuchProviderException {
         Map<String, Object> results = recordRequest();
+        
+        
+         
+        
+        MetadataEntry meta = fileMetadata.get(idString);
+        ContentDisposition contentDisposition = ((meta != null) ? meta.fileDetail :
+            ContentDisposition.type("attachment").fileName(idString).creationDate(new Date()).build());
+        
+        
         // first attempt to get the original from uploader node's DATA_DIR
         java.nio.file.Path filePath = Paths.get(DATA_DIR, idString);
         if (Files.exists(filePath)) {
@@ -294,19 +304,18 @@ public class Shard {
             
             try {
                 byte[] bytes = verifyFile(downloadInputStream, idString);
-                return Response.ok().entity(bytes).build();
+                return Response.ok().entity(bytes).header("Content-Disposition", contentDisposition).build();
             } catch (SignatureException e) {
                 logger.info("request for "+idString+" does not match checksum");
             }
             
         }
-        // TODO: ask each replica, not just the first one.
         // ask for replicas to retrieve from REPLICA_DIR
         int identifier = Util.hexStringToIdentifier(idString);
         logger.info("File doesn't exist or is corrupted, forwarding request");
         try {
             byte[] verifiedOutput = node.forwardLookup(identifier, idString);
-            return Response.ok().entity(verifiedOutput).build();
+            return Response.ok().entity(verifiedOutput).header("Content-Disposition", contentDisposition).build();
         } catch (RemoteException e) {
             return Responses.notFound().build();
         } catch (SignatureException e) {
