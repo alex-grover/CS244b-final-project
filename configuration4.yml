@@ -13,7 +13,7 @@ chord:
   myIP: 192.168.50.4
   entryHost: 192.168.50.1
   entryPort: 8080
-  identifier: sha256
+  identifier: hmac_sha256
 
 logging:
   # Do not display log statements below this threshold to stdout.

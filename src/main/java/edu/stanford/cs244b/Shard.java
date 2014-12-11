@@ -22,6 +22,8 @@ import org.slf4j.LoggerFactory;
 
 import com.codahale.metrics.annotation.Timed;
 import com.sun.jersey.api.Responses;
+import com.sun.jersey.core.header.ContentDisposition;
+import com.sun.jersey.core.header.FormDataContentDisposition;
 import com.sun.jersey.multipart.FormDataParam;
 import com.wordnik.swagger.annotations.Api;
 import com.wordnik.swagger.annotations.ApiOperation;
@@ -51,6 +53,7 @@ import java.io.InputStream;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
 /** A Shard represents a node in the Chord ring 
@@ -85,6 +88,25 @@ public class Shard {
     
     public IdentifierAlgorithm identifierAlgo;
     SecretKeySpec secretKey;
+    
+    // https://stackoverflow.com/questions/5318132/is-it-possible-to-control-the-filename-for-a-response-from-a-jersey-rest-service
+    public class MetadataEntry {
+        protected FormDataContentDisposition fileDetail;
+        protected String userChecksum;
+        protected String sha256;
+        
+        public MetadataEntry(String userChecksum, String sha256) {
+            this.userChecksum = userChecksum;
+            this.sha256 = sha256;
+        }
+        
+        public void setFileDetail(FormDataContentDisposition fileDetail) {
+            this.fileDetail = fileDetail;
+        }
+    }
+    
+    /** map from user hash to file information */
+    private ConcurrentHashMap<String, MetadataEntry> fileMetadata = new ConcurrentHashMap<String, MetadataEntry>();
 
     public Shard(Chord chordConfig, HttpConnectorFactory serverConfig) throws UnknownHostException, NoSuchAlgorithmException {
         // get my IP address and port
@@ -171,14 +193,19 @@ public class Shard {
     @Consumes(MediaType.MULTIPART_FORM_DATA)
     @Produces(MediaType.APPLICATION_JSON)
     @ApiOperation("Insert a new item into the distributed hash table")
-    public Map<String,Object> insertItem(@FormDataParam("file") final InputStream uploadInputStream //,
-            //@FormDataParam("file") final FormDataContentDisposition contentDispositionHeader
-            //@FormDataParam("fileBodyPart") FormDataBodyPart body
-            ) throws NoSuchAlgorithmException, IOException, InvalidKeyException, NoSuchProviderException {
-        final String objectId = saveFile(uploadInputStream, identifierAlgo);
+    public Map<String,Object> insertItem(@FormDataParam("file") final InputStream uploadInputStream,
+            final @FormDataParam("file") FormDataContentDisposition fileDetail) throws NoSuchAlgorithmException, IOException, InvalidKeyException, NoSuchProviderException {
+        final MetadataEntry meta = saveFile(uploadInputStream, identifierAlgo);
+        meta.setFileDetail(fileDetail);
+        fileMetadata.put(meta.userChecksum, meta);
+        fileDetail.getFileName();
+        fileDetail.getType();
         return new HashMap<String,Object>() {{
             put("shard", shardIdAsHex());
-            put("id", objectId);
+            put("id", meta.userChecksum);
+            put("filename", meta.fileDetail.getFileName());
+            put("filetype", meta.fileDetail.getType());
+            put("filesize", meta.fileDetail.getSize());
         }};
     }
     
@@ -187,9 +214,8 @@ public class Shard {
      * @throws IOException 
      * @throws InvalidKeyException 
      * @throws NoSuchProviderException */ 
-    public String saveFile(InputStream uploadInputStream, IdentifierAlgorithm algo)
+    public MetadataEntry saveFile(InputStream uploadInputStream, IdentifierAlgorithm algo)
             throws NoSuchAlgorithmException, IOException, InvalidKeyException, NoSuchProviderException {
-        
         // assume SHA256, SHA256_NOVERIFY, or SHA256_REPLICATE
         MessageDigest sha256 = MessageDigest.getInstance("SHA-256");
         InputStream wrappedInputStream = new DigestInputStream(uploadInputStream, sha256);
@@ -241,7 +267,7 @@ public class Shard {
             node.beginReplicatingFile(identifier, serializedFile);
         }
         
-        return sha256Hash;
+        return new MetadataEntry(userChecksum, sha256Hash);
     }
     
     /** Update an existing item in the distributed hash table */
