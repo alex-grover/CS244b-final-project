@@ -24,7 +24,6 @@ import org.slf4j.LoggerFactory;
 import com.codahale.metrics.annotation.Timed;
 import com.sun.jersey.api.Responses;
 import com.sun.jersey.core.header.ContentDisposition;
-import com.sun.jersey.core.header.FormDataContentDisposition;
 import com.sun.jersey.multipart.FormDataBodyPart;
 import com.sun.jersey.multipart.FormDataParam;
 import com.wordnik.swagger.annotations.Api;
@@ -48,11 +47,9 @@ import java.security.NoSuchAlgorithmException;
 import java.security.NoSuchProviderException;
 import java.security.Security;
 import java.security.SignatureException;
-import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -94,10 +91,10 @@ public class Shard {
     
     // https://stackoverflow.com/questions/5318132/is-it-possible-to-control-the-filename-for-a-response-from-a-jersey-rest-service
     public class MetadataEntry {
-        protected String fileName;
+        public String fileName;
         protected MediaType fileType;
-        protected String userChecksum;
-        protected String sha256;
+        public String userChecksum;
+        public String sha256;
         
         public MetadataEntry(String userChecksum, String sha256) {
             this.userChecksum = userChecksum;
@@ -107,6 +104,10 @@ public class Shard {
         public void setFileDetail(String fileName, MediaType fileType) {
             this.fileName = fileName;
             this.fileType = fileType;
+        }
+        
+        public String getFileType() {
+            return fileType.toString();
         }
     }
     
@@ -175,6 +176,15 @@ public class Shard {
         this.counter = new AtomicLong();
     }
     
+    @GET
+    @Produces(MediaType.APPLICATION_JSON)
+    @Path("/meta")
+    @ApiOperation("Retrieve metadata for all items uploaded to this shard")
+    public HashMap<String, MetadataEntry> getMetadata() {
+        return new HashMap<String, MetadataEntry>(fileMetadata);
+    }
+    
+    
     /** perform basic operations which apply for each request,
      *  eg: populate hashmap containing shardId, record a hit to the shard
      *  (maybe for load-balancing purposes) 
@@ -206,6 +216,7 @@ public class Shard {
         return new HashMap<String,Object>() {{
             put("shard", shardIdAsHex());
             put("id", meta.userChecksum);
+            put("sha256", meta.sha256);
             put("filename", meta.fileName);
             put("filetype", meta.fileType.toString());
         }};
@@ -254,13 +265,13 @@ public class Shard {
 
         if (algo.equals(IdentifierAlgorithm.SHA256_REPLICATE)) {
             // remote node is asking us to replicate this file for them in REPLICA_DIR
-            logger.info("Saving replica to disk as "+sha256Hash);
+            logger.info("Saving replica to disk with sha256Hash="+sha256Hash);
             java.nio.file.Path outputPath = Paths.get(REPLICA_DIR, sha256Hash);
             Files.move(tempPath, outputPath, StandardCopyOption.ATOMIC_MOVE);
 
         } else {
             // this is uploader user's node, save file to disk in DATA directory
-            logger.info("Saving new file to disk");
+            logger.info("Saving new file to disk with userChecksum "+algo+"="+userChecksum);
             java.nio.file.Path outputPath = Paths.get(DATA_DIR, userChecksum);
             Files.move(tempPath, outputPath, StandardCopyOption.ATOMIC_MOVE);
             
