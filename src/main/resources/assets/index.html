@@ -1,18 +1,23 @@
 <!DOCTYPE html>
 <html>
+    <head>
+        <link rel="stylesheet" href="css/bootstrap-3.0.0.min.css" />
+    </head> 
     <body>
-        <form method="post" enctype="multipart/form-data" action="/api/shard">
-            <div>
-                <label for="caption">Image Description</label>
-                <input name="caption" type="text" />
+        <div class="container">
+            <div class="jumbotron">
+                <h2>Shard Admin</h2>
+                <p>This page lets you upload content to your local "shard" instance of the replicated Chord file locker.</p>
+                <form method="post" enctype="multipart/form-data" action="/api/shard">
+                    <div>
+                        <label for="file">Image File</label>
+                        <input name="file" type="file" />
+                    </div>
+                    <div>
+                        <input type="submit" value="Submit" class="btn btn-primary"/>
+                    </div>
+                </form>
             </div>
-            <div>
-                <label for="file">Image File</label>
-                <input name="file" type="file" />
-            </div>
-            <div>
-                <input type="submit" value="Submit" />
-            </div>
-        </form>
+        </div>
     </body>
 </html>
