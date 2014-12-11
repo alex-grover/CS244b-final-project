@@ -322,8 +322,6 @@ public class ChordNode implements RemoteChordNodeI {
     		return;
     	}
     	
-    	stabilizer.cancel();
-    	
     	try {
     		getChordNode(getSuccessor()).setPredecessor(predecessor);
     	} catch (RemoteException e) {
@@ -335,7 +333,7 @@ public class ChordNode implements RemoteChordNodeI {
     		
     		try {
     			RemoteChordNodeI p = findPredecessor(fingerValue);
-    			p.removeNode(this, i, getSuccessor());
+    			p.removeNode(getLocation(), i, getSuccessor());
     		} catch (RemoteException e) {
     			logger.error("Failed to notify predecessor of node leaving", e);
     		}
@@ -346,8 +344,8 @@ public class ChordNode implements RemoteChordNodeI {
     }
     
     @Override
-    public void removeNode(ChordNode node, int i, Finger replacement) {
-    	if (fingerTable[i].host == node.getLocation().host) {
+    public void removeNode(Finger node, int i, Finger replacement) {
+    	if (fingerTable[i].shardid == node.shardid) {
     		fingerTable[i] = replacement;
     		try {
     			getChordNode(predecessor).removeNode(node, i, replacement);

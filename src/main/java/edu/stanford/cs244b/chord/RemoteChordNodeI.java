@@ -39,7 +39,7 @@ public interface RemoteChordNodeI extends Remote {
     public abstract RemoteChordNodeI closestPrecedingFinger(int identifier) throws RemoteException;
     
     /** Remove node from finger table */
-    public abstract void removeNode(ChordNode node, int index, Finger replacement) throws RemoteException;
+    public abstract void removeNode(Finger node, int index, Finger replacement) throws RemoteException;
     
     /** Look up file located on this server */
     public byte[] getFile(String hash) throws RemoteException;

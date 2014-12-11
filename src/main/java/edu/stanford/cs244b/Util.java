@@ -58,6 +58,7 @@ public class Util {
     }
     
     public static int hexStringToIdentifier(String hash) {
-    	return Integer.parseInt(hash.substring(0, 8), 16);
+    	// http://stackoverflow.com/questions/4355619/converting-string-to-intger-hex-value-strange-behaviour
+    	return (int) Long.parseLong(hash.substring(0, 8), 16);
     }
 }

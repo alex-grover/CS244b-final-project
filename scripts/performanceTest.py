@@ -5,7 +5,7 @@ import json
 
 # Simple python script to repeatedly upload the specified file as multipart form post
 
-NUM_TRIALS=100
+NUM_TRIALS=1000
 
 url = 'http://localhost:8080/api/shard'
 #files = {'file': open('testdata/configuration.yml', 'rb')}
