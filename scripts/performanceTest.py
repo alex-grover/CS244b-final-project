@@ -8,32 +8,31 @@ import json
 NUM_TRIALS=1000
 
 url = 'http://localhost:8080/api/shard'
-#files = {'file': open('testdata/configuration.yml', 'rb')}
-#files = {'file': open('testdata/icon.png', 'rb')}
-#files = {'file': open('testdata/paper.pdf', 'rb')}
-files = {'file': open('testdata/Chord.pdf', 'rb')}
-#files = {'file': open('requirements.txt', 'rb')}
-#files = {'file': open('performanceTest.py', 'rb')}
-#files = {'file': open('testdata/photo.jpg', 'rb')}
-#files = {'file': open('testdata/executable.jar', 'rb')}
+files = [
+    {'file': open('testdata/requirements.txt', 'rb')}, # 16 B
+    {'file': open('testdata/perf.txt', 'rb')}, # 2 KB
+    {'file': open('testdata/Chord.pdf', 'rb')}, # 195 KB
+    {'file': open('testdata/gondola.jpg', 'rb')}, # 1.2 MB
+    {'file': open('testdata/lake.jpg', 'rb')} # 12.2 MB
+]
 
-file_id = None
+for index, current_file in enumerate(files):
+    file_id = None
+    print 'Starting test on file ' + str(index)
 
-# Determine latency of POSTs
-print 'Running '+str(NUM_TRIALS)+' POST requests'
-for iteration in range(NUM_TRIALS):
-    response = requests.post(url, files=files)
-    responseJson = json.loads(response.text)
-    file_id = responseJson['id']
+    # Test POST requests
+    for iteration in range(NUM_TRIALS):
+        response = requests.post(url, files=current_file)
+        responseJson = json.loads(response.text)
+        if 'id' in responseJson:
+            file_id = responseJson['id']
 
-print 'Running '+str(NUM_TRIALS)+' GET requests'
-# Determine latency of GETs
-for iteration in range(NUM_TRIALS):
-    result = requests.get(url+'/'+file_id)
+    # Test GET requests
+    for iteration in range(NUM_TRIALS):
+        result = requests.get(url+'/'+file_id)
 
-# Extract latency numbers from DropWizard
-latencies = requests.get('http://localhost:8080/admin/metrics')
-timers = json.loads(latencies.text)['timers']
-print '"edu.stanford.cs244b.Shard.insertItem": '+str(timers['edu.stanford.cs244b.Shard.insertItem'])
-print '"edu.stanford.cs244b.Shard.getItem": '+str(timers['edu.stanford.cs244b.Shard.getItem'])
-
+    # Extract latency numbers from DropWizard
+    latencies = requests.get('http://localhost:8080/admin/metrics')
+    timers = json.loads(latencies.text)['timers']
+    print 'Insert p99 latency for file ' + str(index) + ': ' + str(timers['edu.stanford.cs244b.Shard.insertItem']['p99'])
+    print 'Get p99 latency for file ' + str(index) + ': ' + str(timers['edu.stanford.cs244b.Shard.getItem']['p99'])
