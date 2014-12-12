@@ -326,10 +326,11 @@ public class Shard {
             
         }
         // ask for replicas to retrieve from REPLICA_DIR
-        int identifier = Util.hexStringToIdentifier(idString);
         logger.info("File doesn't exist or is corrupted, forwarding request");
         try {
-            byte[] verifiedOutput = node.forwardLookup(identifier, idString);
+            MetadataEntry metadata = fileMetadata.get(idString);
+            int sha256 = Util.hexStringToIdentifier(metadata.sha256); 
+            byte[] verifiedOutput = node.forwardLookup(sha256, metadata.sha256, metadata.userChecksum);
             ResponseBuilder rb = Response.ok().entity(verifiedOutput).header("Content-Disposition", contentDisposition);
             if (meta != null) {
                 rb.type(meta.fileType);
