@@ -2,6 +2,10 @@
 .settings
 .project
 bin
-data
+data*
+key*.txt
 target
-temp
+temp*
+replica*
+.vagrant
+env

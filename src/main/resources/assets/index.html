@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <style>
+            @media (min-width: 1200px) {
+                .container {
+                    min-width: 1400px;
+                }
+            }
+        </style>
+        <link rel="stylesheet" href="css/bootstrap-3.0.0.min.css" />
+        <link rel="stylesheet" href="css/ng-table-0.3.0.css" />
+
+        <script type="text/javascript" src="js/angular-1.2.27.js"></script>
+        <script type="text/javascript" src="js/ng-table-0.3.0.js"></script>
+        <script type="text/javascript" src="js/shard.js"></script>
+    </head> 
+    <body ng-app="main">
+        <div class="container" ng-controller="ShardCtrl">
+            <div class="jumbotron">
+                <h2>Shard Admin {{meta.shard}}</h2>
+                <p>This page lets you upload content to your local "shard" instance of the replicated Chord file locker.</p>
+                <form method="post" enctype="multipart/form-data" action="/api/shard">
+                    <input name="file" type="file" ng-model="meta.upload" ng-required="!meta.upload"/>
+                    <div>
+                        <input type="submit" value="Submit" class="btn btn-success"/>
+                        <input type="button" value="Refresh" ng-click="refresh()" class="btn btn-primary"/>
+                    </div>
+                </form>
+            </div>
+            <p><strong>User Items</strong></p>
+            <table ng-table="fileTableParams" class="table">
+                <tr ng-repeat="file in meta.files">
+                    <td data-title="'File Name'"><a href="/api/shard/{{file.userChecksum}}">{{file.fileName}}</a></td>
+                    <td data-title="'File Type'">{{file.fileType}}</td>
+                    <td data-title="'User Checksum'"><kbd>{{file.userChecksum}}</kbd></td>
+                    <td data-title="'SHA256 Hash'"><kbd>{{file.sha256}}</kbd></td>
+                </tr>
+            </table>
+            <p><strong>Fingers</p>
+            <table ng-table="fingerTableParams" class="table">
+                <tr ng-repeat="finger in meta.fingers">
+                    <td data-title="'FingerIndex'">{{$index}}</td>
+                    <td data-title="'ShardId'"><a href="http://localhost:{{finger.port-1}}">{{finger.shardId}}</a></td>
+                    <td data-title="'Host'">{{finger.host}}</td>
+                    <!-- Port stored by ChordNode is RMI port; Shard webserver port is 1 lower -->
+                    <td data-title="'Port'">{{finger.port-1}}</td>
+                </tr>
+            </table>
+        </div>
+    </body>
+</html>

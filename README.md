@@ -32,3 +32,23 @@ Browse to [http://localhost:8081/metrics?pretty=true](http://localhost:8081/metr
 If you start the server without any arguments, then it will assume that it is the first node in the Chord ring. To join an existing Chord ring, specify the ip address of any server in the ring. The server will automatically lookup its correct position in the ring and join it. For example, in eclipse Run > Run Configurations > Arguments > VM arguments:
 
     -Ddw.chord.entryHost=192.168.1.4
+
+You may modify the algorithm (SHA-256 hash or HMAC-SHA256 keyed message authentication code - default) used to generate identifiers for objects added to chord ring by passing the following parameter:
+
+    -Ddw.chord.identifier=hmac_sha256
+    -Ddw.chord.identifier=sha256
+
+## Running On Multiple Virtual Machines ##
+1. Download and install [Vagrant](https://www.vagrantup.com/downloads.html) and [VirtualBox](https://www.virtualbox.org/wiki/Downloads)
+2. Pull latest code from chord-feature branch
+3. In terminal, cd to the project directory, execute the following command:
+
+    vagrant up
+
+4. Wait for the 2 virtual machines to download and load, then install the software on them:
+
+    ./deploy.sh
+
+5. Optionally, log into the virtual machine:
+
+    vagrant ssh cs244b-1
