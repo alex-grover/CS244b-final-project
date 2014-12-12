@@ -18,6 +18,9 @@ files = [
 ]
 
 for index, current_file in enumerate(files):
+    from subprocess import call
+    call(['vagrant', 'provision'])
+    
     file_id = None
     print 'Starting test on file ' + str(index)
 
