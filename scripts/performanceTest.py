@@ -23,7 +23,7 @@ for index, current_file in enumerate(files):
 
     # Test POST requests
     for iteration in range(NUM_TRIALS):
-        print 'POST',iteration,'/',NUM_TRIALS
+        #print 'POST',iteration,'/',NUM_TRIALS
         response = requests.post(url, files=current_file)
         responseJson = json.loads(response.text)
         if 'id' in responseJson:
@@ -31,7 +31,7 @@ for index, current_file in enumerate(files):
 
     # Test GET requests
     for iteration in range(NUM_TRIALS):
-        print 'GET',iteration,'/',NUM_TRIALS
+        #print 'GET',iteration,'/',NUM_TRIALS
         result = requests.get(url+'/'+file_id)
 
     # Extract latency numbers from DropWizard
