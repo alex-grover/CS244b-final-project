@@ -395,7 +395,7 @@ public class ChordNode implements RemoteChordNodeI {
 	/** Look up file on remote replica node, keep looking at successors for replica 
 	 * @throws RemoteException 
 	 * @throws SignatureException */
-	public byte[] forwardLookup(int identifier, String hash) throws RemoteException, SignatureException, IOException {
+	public byte[] forwardLookup(int identifier, String sha256hash, String hmac) throws RemoteException, SignatureException, IOException {
 	    int numTries = REPLICATION_FACTOR;
 	    RemoteChordNodeI replica = null;
 	    while (numTries > 0) {
@@ -409,15 +409,15 @@ public class ChordNode implements RemoteChordNodeI {
                     replica = getChordNode(replica.getSuccessor());
 	            }
 	            int shardId = replica.getShardId(); // will throw remoteException if this fails
-	            byte[] retrievedData = replica.getFile(hash);
+	            byte[] retrievedData = replica.getFile(sha256hash);
 	            if (retrievedData == null) {
-	                logger.error("Replica "+Integer.toHexString(shardId)+" does not have copy of file "+hash);
+	                logger.error("Replica "+Integer.toHexString(shardId)+" does not have copy of file "+sha256hash);
 	                continue;
 	            }
 
 	            InputStream downloadInputStream = new ByteArrayInputStream(retrievedData);
 	            byte[] verifiedBytes;
-                verifiedBytes = shard.verifyFile(downloadInputStream, hash);
+                verifiedBytes = shard.verifyFile(downloadInputStream, hmac);
 	            return verifiedBytes;
 	        } catch (RemoteException e) {
 	            logger.error("Error looking up remote node", e);
