@@ -8,30 +8,35 @@ import json
 NUM_TRIALS=100
 
 url = 'http://localhost:8080/api/shard'
-#files = {'file': open('testdata/configuration.yml', 'rb').read()}
-#files = {'file': open('testdata/icon.png', 'rb').read()}
-#files = {'file': open('testdata/paper.pdf', 'rb').read()}
-files = {'file': open('testdata/Chord.pdf', 'rb').read()}
-#files = {'file': open('requirements.txt', 'rb').read()}
-#files = {'file': open('performanceTest.py', 'rb').read()}
-#files = {'file': open('testdata/photo.jpg', 'rb').read()}
-#files = {'file': open('testdata/executable.jar', 'rb').read()}
+#files = {'file': open('testdata/icon.png', 'rb')}
+#files = {'file': open('testdata/paper.pdf', 'rb')}
+#files = {'file': open('testdata/photo.jpg', 'rb')}
 
-file_id = None
+files = [{'file': open('testdata/configuration.yml', 'rb').read()},
+         {'file': open('testdata/Chord.pdf', 'rb').read()},
+         {'file': open('requirements.txt', 'rb').read()},
+         {'file': open('performanceTest.py', 'rb').read()}]
+         #{'file': open('testdata/executable.jar', 'rb')}]
+
+file_ids = dict()
 
 # Determine latency of POSTs
 print 'Running '+str(NUM_TRIALS)+' POST requests'
 for iteration in range(NUM_TRIALS):
     print 'POST',iteration,'/',NUM_TRIALS
-    response = requests.post(url, files=files)
-    responseJson = json.loads(response.text)
-    file_id = responseJson['id']
+    for current_file in files:
+        response = requests.post(url, files=current_file)
+        responseJson = json.loads(response.text)
+        file_ids[responseJson['filename']] = responseJson['id']
 
 print 'Running '+str(NUM_TRIALS)+' GET requests'
 # Determine latency of GETs
 for iteration in range(NUM_TRIALS):
     print 'GET',iteration,'/',NUM_TRIALS
-    result = requests.get(url+'/'+file_id)
+    import ipdb
+    ipdb.set_trace()
+    for file_id in file_ids.values():
+        result = requests.get(url+'/'+file_id)
 
 # Extract latency numbers from DropWizard
 latencies = requests.get('http://localhost:8080/admin/metrics')
