@@ -10,12 +10,14 @@ NUM_TRIALS=100
 url = 'http://localhost:8080/api/shard'
 
 files = [
-    {'file': open('testdata/requirements.txt', 'rb').read()}, # 16 B
-    {'file': open('testdata/perf.txt', 'rb').read()}, # 2 KB
-    {'file': open('testdata/Chord.pdf', 'rb').read()}, # 195 KB
-    {'file': open('testdata/gondola.jpg', 'rb').read()}, # 1.2 MB
+    {'file': open('scripts/testdata/requirements.txt', 'rb').read()}, # 16 B
+    {'file': open('scripts/testdata/perf.txt', 'rb').read()}, # 2 KB
+    {'file': open('scripts/testdata/Chord.pdf', 'rb').read()}, # 195 KB
+    {'file': open('scripts/testdata/gondola.jpg', 'rb').read()}]#, # 1.2 MB
+'''
     {'file': open('testdata/lake.jpg', 'rb').read()} # 12.2 MB
 ]
+'''
 
 for index, current_file in enumerate(files):
     from subprocess import call
