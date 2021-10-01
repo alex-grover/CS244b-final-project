@@ -47,7 +47,7 @@ These commandline arguments will override any parameters which were set in the c
 2. Pull latest code from one of our two git repositories:
 
         git clone https://github.com/akovacs/cs244b.git # OR
-        git clone https://github.com/ajgrover/CS244b-final-project.git
+        git clone https://github.com/alex-grover/CS244b-final-project.git
 
 3. In your terminal, cd to the project directory, execute the following command:
 
